@@ -1,17 +1,4 @@
-<<<<<<< HEAD
 # 타입리걸 (TypeLegal)
-
-<div align="center">
-  <img src="frontend/public/images/typelegal_logo.png" alt="TypeLegal 로고" width="200" />
-  <p>Q&A 기반 스마트 계약서 자동화 솔루션</p>
-  <p>
-    <a href="https://www.typelegal.io" target="_blank">🌐 서비스 바로가기</a>
-    ·
-    <a href="#demo">📱 데모 보기</a>
-    ·
-    <a href="#features">✨ 주요 기능</a>
-  </p>
-</div>
 
 ## 🚀 프로젝트 소개
 
@@ -193,4 +180,3 @@ typelegal-app/
     ├── utils/                      # 유틸 함수 모음 (문자열 처리, 날짜 포맷 등)
     ├── package.json                # 프론트엔드 의존성 및 설정
     └── .eslintrc.json              # 코드 스타일 및 린트 규칙
->>>>>>> bfd9a3ab50313ad16c006e6ad0c0a72cf8f222f4
