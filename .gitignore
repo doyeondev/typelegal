@@ -84,3 +84,4 @@ dockerfile~
 # === TypeScript ===
 *.tsbuildinfo
 next-env.d.ts
+.next/
