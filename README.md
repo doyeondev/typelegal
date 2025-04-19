@@ -149,5 +149,5 @@ typelegal/
 ---
 
 <div align="center">
-  <p>© 2023 TypeLegal - 모든 권리 보유</p>
+  <p>© 2023 TypeLegal</p>
 </div>
