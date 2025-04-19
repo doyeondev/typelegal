@@ -1,3 +1,89 @@
+<<<<<<< HEAD
+# 타입리걸 (TypeLegal)
+
+<div align="center">
+  <img src="frontend/public/images/typelegal_logo.png" alt="TypeLegal 로고" width="200" />
+  <p>Q&A 기반 스마트 계약서 자동화 솔루션</p>
+  <p>
+    <a href="https://www.typelegal.io" target="_blank">🌐 서비스 바로가기</a>
+    ·
+    <a href="#demo">📱 데모 보기</a>
+    ·
+    <a href="#features">✨ 주요 기능</a>
+  </p>
+</div>
+
+## 🚀 프로젝트 소개
+
+TypeLegal은 법률 지식이 없는 사용자도 쉽게 계약서를 작성할 수 있는 Q&A 기반 계약서 생성 플랫폼입니다. 사용자가 질문에 답변하면 그에 따라 **동적으로 계약 내용이 생성되고 후속 질문이 변화**하는 인터랙티브한 경험을 제공합니다.
+
+- **친화적인 UX**: 복잡한 법률 용어를 쉬운 질문으로 변환하여 누구나 사용 가능
+- **맞춤형 계약서**: 사용자 응답에 따라 조항이 맞춤화되는 다이나믹 템플릿
+- **다국어 지원**: 국문/영문 계약서 약 10종 작성 가능
+- **전문가 검증**: 법률 전문가가 검토한 안전한 템플릿 제공
+
+<h2 id="demo">🎬 데모</h2>
+
+체험 계정으로 서비스를 이용해보세요:
+
+- 🔗 URL: [www.typelegal.io](https://www.typelegal.io)
+- 👤 ID: test@typelegal.io
+- 🔑 PW: test12345!
+
+<p align="center">
+  <img src="frontend/public/images/typelegal_demo.gif" alt="TypeLegal 데모" width="700" />
+</p>
+
+<h2 id="features">✨ 주요 기능</h2>
+
+- **Q&A 기반 계약서 작성**: 간단한 질문에 답하면 계약서가 자동 생성
+- **다양한 계약서 템플릿**: 프리랜서 계약, 비밀유지계약(NDA), 투자계약 등
+- **실시간 계약서 미리보기**: 작성 중인 계약서를 실시간으로 확인
+- **내보내기 기능**: Word 형식으로 내보내기
+
+---
+
+## ⚠️ 실행 관련 안내
+
+본 프로젝트는 누구나 열람할 수 있도록 공개되어 있으며,  
+기술 구조나 코드 참고용으로 자유롭게 활용 가능합니다.
+
+다만, 실제 서비스와 연결된 데이터베이스 및 인증 서버 등은 회사 내부 인프라로 운영되고 있어,  
+외부에서 클론한 코드만으로는 **정상적인 전체 서비스 실행은 불가능**합니다.
+
+- `.env` 파일은 회사 내부에서만 제공되며, 운영용 DB/비밀키 정보는 포함되어 있지 않습니다.
+- 로컬 실행은 구조 파악 및 프론트·백엔드 UI 테스트 정도까지만 가능합니다.
+
+> ✅ `.env.example` 파일은 기본적인 구조 참고용으로 포함되어 있습니다.  
+> ❌ 실서비스 기능(저장, 인증, DB 연동 등)은 제한됩니다.
+
+---
+
+## 🛠️ 기술 스택
+
+### 프론트엔드
+
+- **Next.js**: React 기반 프레임워크
+- **React**: 사용자 인터페이스 구축
+- **TypeScript**: 타입 안전성 보장
+- **Material UI & TailwindCSS**: UI 디자인
+- **SWR**: 데이터 페칭 및 캐싱
+- **Jest & Playwright**: 테스트 자동화
+
+### 백엔드
+
+- **Spring Boot**: Java 기반 백엔드 프레임워크
+- **Spring Security & JWT**: 인증 및 보안
+- **Spring Data JPA**: 데이터베이스 접근 계층
+- **PostgreSQL**: 메인 데이터베이스
+- **JSONB**: 계약서 템플릿 및 질문 데이터 저장
+
+### 인프라 & 도구
+
+- **Docker**: 컨테이너화
+- **GitHub Actions**: CI/CD 파이프라인
+- **AWS**: 클라우드 인프라
+=======
 # 📝 타입리걸 (TypeLegal)
 
 ## 📌 프로젝트 소개
@@ -7,10 +93,78 @@
 
 ## 🌍 배포 주소
 🔗 [www.typelegal.io](https://www.typelegal.io) (체험 id: test@typelegal.io / pw: test12345!)
+>>>>>>> bfd9a3ab50313ad16c006e6ad0c0a72cf8f222f4
 
 ---
 
 ## 📂 프로젝트 구조
+<<<<<<< HEAD
+
+```
+typelegal/
+│
+├── backend/                        # Spring Boot 백엔드
+│   ├── src/
+│   │   ├── main/
+│   │   │   ├── java/com/typelegal/
+│   │   │   │   ├── domain/         # 도메인 계층 (DDD 기반 구조)
+│   │   │   │   │   ├── member/     # 회원 도메인
+│   │   │   │   │   │   ├── api/          # 컨트롤러 (외부 요청 처리)
+│   │   │   │   │   │   ├── application/  # 서비스 (비즈니스 로직)
+│   │   │   │   │   │   ├── domain/       # 엔티티 (도메인 모델)
+│   │   │   │   │   │   ├── dto/          # 데이터 전송 객체
+│   │   │   │   │   │   ├── dao/          # 데이터 접근 객체 (리포지토리)
+│   │   │   │   │   │   └── exception/    # 도메인별 예외 처리
+│   │   │   │   │   ├── template/    # 계약서 템플릿 도메인
+│   │   │   │   │   ├── question/    # 질문 도메인
+│   │   │   │   │   ├── clause/      # 계약 조항 도메인
+│   │   │   │   │   └── drafting/    # 계약서 작성 도메인
+│   │   │   │   ├── global/          # 공통 기능
+│   │   │   │   │   ├── auth/        # 인증 관련 기능
+│   │   │   │   │   ├── config/      # 전역 설정
+│   │   │   │   │   ├── security/    # 보안 설정
+│   │   │   │   │   ├── error/       # 전역 예외 처리
+│   │   │   │   │   ├── common/      # 공통 유틸리티
+│   │   │   │   │   └── util/        # 유틸리티 함수
+│   │   │   │   ├── infra/           # 외부 인프라 계층
+│   │   │   │   │   ├── email/       # 이메일 송신 인프라
+│   │   │   │   │   └── log/         # 로깅 인프라
+│   │   │   │   └── BackendApplication.java  # 메인 애플리케이션 클래스
+│   │   │   ├── resources/          # 환경 변수, DB 설정
+│   │   │   │   └── application.properties  # 애플리케이션 설정
+│   │   └── test/                   # 테스트 코드
+│   └── pom.xml                     # 프로젝트 의존성 관리 (Maven)
+│
+└── frontend/                       # Next.js 프론트엔드
+    ├── components/                 # 재사용 UI 컴포넌트
+    ├── pages/                      # 페이지 컴포넌트 및 API 라우트
+    ├── utils/                      # 유틸리티 함수
+    ├── styles/                     # 글로벌 스타일 및 테마
+    ├── public/                     # 정적 리소스
+    └── package.json                # 프론트엔드 의존성 및 스크립트
+```
+
+## 📝 라이센스
+
+이 프로젝트는 MIT 라이센스 하에 공개됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
+
+## 👨‍💻 팀원
+
+- 설우성 - 프론트엔드 개발 및 디자인
+- 김도연 - 백엔드 개발
+- 김소영 - 데이터 및 인프라
+- 김창호 - 법률 컨텐츠 및 UX
+
+## 📞 문의하기
+
+문의사항이 있으시면 [team@typelegal.io](mailto:team@typelegal.io)로 연락주세요.
+
+---
+
+<div align="center">
+  <p>© 2023 TypeLegal - 모든 권리 보유</p>
+</div>
+=======
 ```bash
 typelegal-app/
 │
@@ -39,3 +193,4 @@ typelegal-app/
     ├── utils/                      # 유틸 함수 모음 (문자열 처리, 날짜 포맷 등)
     ├── package.json                # 프론트엔드 의존성 및 설정
     └── .eslintrc.json              # 코드 스타일 및 린트 규칙
+>>>>>>> bfd9a3ab50313ad16c006e6ad0c0a72cf8f222f4

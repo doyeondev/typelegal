@@ -1,4 +1,4 @@
-import { num2han } from '/utils/numberUtils.js';
+import { num2han } from './numberUtils.js';
 
 export function returnCurrencyValue(e) {
 	let val = e.target.value;
@@ -33,6 +33,9 @@ export function returnInputValue(e, item) {
 		return e.target.value;
 	} else if (e.target.toString().includes('SelectElement')) {
 		let selectedIdx = e.target.selectedIndex;
+		if (selectedIdx === undefined || !e.target.options || selectedIdx < 0 || !e.target.options[selectedIdx]) {
+			return undefined;
+		}
 		let selectedValue = e.target.options[selectedIdx].value;
 		return selectedValue;
 	} else if (e.target.type === 'date') {

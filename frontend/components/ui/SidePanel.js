@@ -71,7 +71,7 @@ const Sidebar = ({ questionGroupData, onEditClickHandler, showSidebar, setShowSi
 													수정하기
 												</button>
 											</div>
-											<div className="flex flex-col space-y-2 mt-3">
+											<div className="flex flex-col space-y-2 mt-3" key={uuidv4()}>
 												{questionGroupData[key].map(elem => {
 													return (
 														<>

@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    # 테스트용 인메모리 H2 데이터베이스 설정
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+    show-sql: true
+  security:
+    # 테스트 환경에서 CSRF 보호 비활성화
+    csrf:
+      enabled: false
+
+# JWT 테스트 설정
+jwt:
+  secret: test-jwt-secret-key-for-unit-testing-purposes-only
+  expiration: 86400000 # 1일 (밀리초)
+
+# 테스트 환경에서는 로깅 레벨 조정
+logging:
+  level:
+    org.hibernate.SQL: debug
+    org.hibernate.type.descriptor.sql: trace
+    com.typelegal: debug

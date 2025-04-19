@@ -17,9 +17,16 @@ export function findItemsFromArray(arr, vals, key) {
 
 	for (let i = 0; i < arr.length; i++) {
 		for (let j = 0; j < vals.length; j++) {
-			if (Array.isArray(vals[j]) === true && _.isEqual(arr[i][key].sort(), vals[j].sort())) {
+			if (Array.isArray(vals[j]) === true) {
 				console.log('val이 Array인 경우');
-				items[items.length] = arr[i];
+				// 배열의 순서와 관계없이 내용이 같은지 확인
+				// 양쪽 배열을 정렬하여 비교 (원본 배열은 수정하지 않음)
+				const arrKeySorted = [...arr[i][key]].sort();
+				const valsSorted = [...vals[j]].sort();
+
+				if (_.isEqual(arrKeySorted, valsSorted)) {
+					items[items.length] = arr[i];
+				}
 			} else if (arr[i][key] == vals[j]) {
 				console.log('val이 Array 아닌 경우');
 				items[items.length] = arr[i];
@@ -83,9 +90,16 @@ export function findIndexesFromArray(arr, vals, key) {
 
 	for (let i = 0; i < arr.length; i++) {
 		for (let j = 0; j < vals.length; j++) {
-			if (Array.isArray(vals[j]) === true && _.isEqual(arr[i][key].sort(), vals[j].sort())) {
+			if (Array.isArray(vals[j]) === true) {
 				console.log('val이 Array인 경우');
-				indexes[indexes.length] = i;
+				// 배열의 순서와 관계없이 내용이 같은지 확인
+				// 양쪽 배열을 정렬하여 비교 (원본 배열은 수정하지 않음)
+				const arrKeySorted = [...arr[i][key]].sort();
+				const valsSorted = [...vals[j]].sort();
+
+				if (_.isEqual(arrKeySorted, valsSorted)) {
+					indexes[indexes.length] = i;
+				}
 			} else if (arr[i][key] == vals[j]) {
 				console.log('val이 Array 아닌 경우');
 				indexes[indexes.length] = i;

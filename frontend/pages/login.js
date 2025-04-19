@@ -2,11 +2,16 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
+import memberApi from './api/services/memberApi'; // 경로 수정
+import { useRouter } from 'next/router';
 // import LoginItem from '../components/login-item'
 
 export default function Login() {
 	const [loginError, setLoginError] = useState(false);
 	const [disabled, setDisabled] = useState(false);
+	const [errorMessage, setErrorMessage] = useState('');
+	const router = useRouter();
+
 	useEffect(() => {
 		async function getPageData() {
 			localStorage.theme = 'light';
@@ -25,50 +30,111 @@ export default function Login() {
 			...prev,
 			[name]: value,
 		}));
+		setLoginError(false); // 입력 시 오류 상태 초기화
+		setErrorMessage('');
 	};
 
-	const onSubmit = () => {
-		// console.log('들어옴')
-		// console.log(input)
-		setDisabled(true);
-		let loginInfo = { email: input.userEmail, password: input.password };
-		loginAccount(loginInfo);
+	// 엔터키 처리 함수 개선
+	const handleKeyDown = e => {
+		if (e.key === 'Enter') {
+			e.preventDefault(); // 폼 기본 제출 방지
+			onSubmit(e);
+		}
 	};
 
-	async function loginAccount(userInfo) {
-		// console.log('entered loginAccount', userInfo)
-		const apiUrlEndpoint = `https://conan.ai/_functions/loginMember/${userInfo.email}/${userInfo.password}`;
-		const response = await fetch(apiUrlEndpoint);
-		// console.log('response', response)
+	const onSubmit = async e => {
+		if (e) e.preventDefault();
 
-		if (response.status === 200) {
-			const res = await response.json();
-			const data = await res.items;
-			// getMemberType(data._id)
-			const memberInfo = { email: data.user_email, name: data.user_name, submittedSurvey: data.submittedSurvey ? true : false };
-			console.log('memberInfo', memberInfo);
-			sessionStorage.setItem('member_key', JSON.stringify(memberInfo));
-			// window.location.reload()
-			location.assign('/dashboard');
-		} else if (response.status === 404) {
+		// 입력값 유효성 검사
+		if (!input.userEmail || !input.password) {
 			setLoginError(true);
+			setErrorMessage('이메일과 비밀번호를 모두 입력해주세요.');
+			return;
+		}
+
+		try {
+			setDisabled(true);
+			await loginAccount(input.userEmail, input.password);
+		} catch (error) {
+			console.error('로그인 오류:', error);
+			setLoginError(true);
+			setErrorMessage(error.message || '로그인 처리 중 오류가 발생했습니다.');
+		} finally {
 			setDisabled(false);
 		}
-	}
+	};
 
-	// async function getMemberType(userId) {
-	//   console.log('entered getMemberType', userId)
-	//   const apiUrlEndpoint = `https://conan.ai/_functions/memberType/${userId}`
-	//   const response = await fetch(apiUrlEndpoint)
-	//   const res = await response.json()
-	//   const data = await res.items
-	//   console.log('data', data)
-	// }
-	function press(e) {
-		if (e.keyCode == 13) {
-			onSubmit(); //javascript에서는 13이 enter키를 의미함
+	/**
+	 * 로그인 처리 함수
+	 * 백엔드 API를 사용하여 인증하고 JWT 토큰을 받아옵니다.
+	 */
+	async function loginAccount(email, password) {
+		try {
+			console.log('로그인 시도 중...');
+			console.log('입력된 이메일:', email);
+			console.log('입력된 비밀번호:', password);
+
+			// API 클라이언트를 사용하여 로그인 (필드명 변환)
+			const response = await memberApi.login({
+				email: email, // userEmail에서 email로 필드명 변환
+				password: password,
+			});
+			console.log('로그인 성공:', response);
+
+			// 사용자 정보 및 토큰 저장
+			if (response && response.token) {
+				// JWT 토큰 저장
+				localStorage.setItem('auth_token', response.token);
+				console.log('토큰 저장 완료:', response.token);
+
+				// 사용자 정보 저장
+				const memberInfo = {
+					id: response.id ? response.id.toString() : null, // UUID를 문자열로 변환
+					email: response.email,
+					name: response.name,
+					role: response.role || 'USER',
+					submittedSurvey: response.submittedSurvey || false,
+				};
+
+				console.log('저장할 사용자 정보:', memberInfo);
+
+				// 세션스토리지에 사용자 정보 저장
+				sessionStorage.setItem('member_key', JSON.stringify(memberInfo));
+				console.log('세션 스토리지 저장 완료');
+
+				// 스토리지 정보 확인
+				setTimeout(() => {
+					console.log('로그인 후 확인 - 토큰:', localStorage.getItem('auth_token'));
+					console.log('로그인 후 확인 - 사용자 정보:', sessionStorage.getItem('member_key'));
+
+					// 이전에 시도했던 페이지가 있으면 해당 페이지로 이동
+					const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+					if (redirectPath) {
+						console.log('로그인 후 리디렉션:', redirectPath);
+						sessionStorage.removeItem('redirectAfterLogin'); // 사용 후 삭제
+						router.push(redirectPath);
+					} else {
+						// 없으면 대시보드로 이동
+						router.push('/dashboard');
+					}
+				}, 500);
+			} else {
+				throw new Error('로그인 정보가 올바르지 않습니다.');
+			}
+		} catch (error) {
+			console.error('로그인 처리 오류:', error);
+
+			// 에러 메시지 설정
+			if (error.status === 401) {
+				throw new Error('이메일 또는 비밀번호가 올바르지 않습니다.');
+			} else if (error.message) {
+				throw error;
+			} else {
+				throw new Error('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
+			}
 		}
 	}
+
 	return (
 		// <section className="bg-white dark:bg-gray-900 h-screen">
 		// <LoginItem />
@@ -88,28 +154,33 @@ export default function Login() {
 							<Image alt="타입리걸" src="/icon/typelegal.png" width={0} height={0} sizes="100vw" className="w-[160px] p-2" />
 						</Link>
 						<h1 className="text-xl text-center font-bold leading-tight tracking-tight text-gray-900 md:text-lg dark:text-white">로그인</h1>
+
+						{/* 오류 메시지 표시 */}
+						{loginError && (
+							<div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
+								<span className="font-medium">오류:</span> {errorMessage || '이메일 또는 비밀번호가 일치하지 않습니다.'}
+							</div>
+						)}
+
 						<form className="space-y-8" action="#">
 							<div>
-								<label for="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+								<label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
 									이메일
 								</label>
 								<input
 									type="email"
 									name="userEmail"
+									id="email"
 									className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-purple-600 focus:border-purple-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-purple-500 dark:focus:border-purple-500"
 									placeholder="name@company.com"
 									value={input.userEmail}
-									onChange={function (event) {
-										onInputChange(event);
-										setLoginError(false);
-										// setDisabled(false)
-									}}
-									onKeyDown={press}
+									onChange={onInputChange}
+									onKeyDown={handleKeyDown}
 									required=""
 								/>
 							</div>
 							<div>
-								<label for="password" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+								<label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
 									비밀번호
 								</label>
 								<input
@@ -118,12 +189,8 @@ export default function Login() {
 									id="password"
 									placeholder="••••••••"
 									value={input.password}
-									onChange={function (event) {
-										onInputChange(event);
-										setLoginError(false);
-										// setDisabled(false)
-									}}
-									onKeyDown={press}
+									onChange={onInputChange}
+									onKeyDown={handleKeyDown}
 									className="bg-gray-50 border border-gray-300 text-gray-900 sm:text-sm rounded-lg focus:ring-purple-600 focus:border-purple-600 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-purple-500 dark:focus:border-purple-500"
 									required=""
 								/>
@@ -156,16 +223,15 @@ export default function Login() {
 								disabled={disabled}
 								className="w-full place-content-center cursor-pointer flex disabled:bg-purple-200 disabled:cursor-progress text-white bg-purple-500 hover:bg-purple-600 py-2.5 focus:ring-4 focus:ring-purple-300 font-medium rounded-lg text-sm dark:bg-purple-600 dark:hover:bg-purple-700 focus:outline-none dark:focus:ring-purple-800"
 							>
-								로그인
+								{disabled ? '로그인 중...' : '로그인'}
 							</button>
-							{/* <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                ​계정이 없다면 바로 가입하세요!
-                <Link href="/signup" className="ml-2 font-medium text-purple-600 hover:underline dark:text-purple-500">
-                  무료 회원가입 하기
-                </Link>
-              </p> */}
+							<p className="text-sm font-medium text-gray-500 dark:text-gray-400">
+								계정이 없으신가요?
+								<Link href="/signup" className="ml-2 font-medium text-purple-600 hover:underline dark:text-purple-500">
+									회원가입 하기
+								</Link>
+							</p>
 						</form>
-						{loginError && <p className="text-sm text-gray-500 text-center">이메일 혹은 비밀번호가 일치하지 않습니다</p>}
 					</div>
 				</div>
 			</div>

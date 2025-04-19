@@ -1,30 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import _ from 'lodash';
 import * as R from 'ramda';
 
 import Head from 'next/head';
-import Link from 'next/link';
-import Image from 'next/image';
 
-// 모달 Import
-import SurveyModal from '/components/modals/SurveyModal';
-import LoginModal from '../../components/modals/LoginModal';
+// 분리된 컴포넌트 Import
+import DraftHeader from '../../components/draft/DraftHeader';
+import DraftFooter from '../../components/draft/DraftFooter';
+import DraftSidebar from '../../components/draft/DraftSidebar';
+import DraftContent from '../../components/draft/DraftContent';
+import DraftPreview from '../../components/draft/DraftPreview';
 
 // UI Component Import
 import Spinner from '/components/ui/Spinner';
-import ProgressBar from '/components/ui/ProgressBar';
-import ProgressList from '/components/ui/ProgressList';
 import SidePanel from '/components/ui/SidePanel';
 import ToastSave from '/components/ui/ToastSave';
-import CCard from '/components/ui/CCard';
-
-// 질문 Component Import
-import QuestionItem from '../../components/questions/QuestionItems';
-import QuestionInput from '../../components/questions/QuestionInput';
-import QCardBtn from '../../components/questions/QCardBtn';
 
 // 유틸 함수 Import
 import { fetchProcessedData, saveContractData } from '/utils/dataUtils.js';
@@ -34,12 +27,15 @@ import { removeHighlight, replaceMulCharInString } from '/utils/textUtils.js';
 import { timeDiffSec, timeDiffMin, timestamp } from '/utils/timeUtils.js';
 import { handleScroll, handleScroll2 } from '/utils/uxUtils.js';
 import { exportContent } from '/utils/fileUtils.js';
+import { resetAuthToken } from '/utils/authUtils.js';
 
 // hook, api Import
 import { useLeavePageConfirmation } from '/pages/hooks/useLeavePageConfirmation';
 import { post_saveLog } from '/pages/api/logs/docSave';
 import { post_draftLog } from '/pages/api/logs/docDraft';
 import { post_activityLog } from '/pages/api/logs/docActivity';
+import draftingApi from '/pages/api/services/draftingApi';
+import { getMemberIdFromStorage } from '/pages/api/services/httpClient';
 
 let clause_template, question_template;
 let tracerKey, tracer, cidx;
@@ -84,8 +80,6 @@ export default function Draft({ contract }) {
 	// Survey Modal
 	const [isOpen, setIsOpen] = useState(false);
 
-	// Login Modal
-	const [loginModalOpen, setLoginModalOpen] = useState(false);
 	const [userOS, setUserOS] = useState('');
 	const [questionPanel, setQuestionPanel] = useState(true);
 	const [docStatus, setDocStatus] = useState('');
@@ -96,80 +90,224 @@ export default function Draft({ contract }) {
 
 	useEffect(() => {
 		async function getPageData() {
-			localStorage.theme = 'light';
-			// const id = searchParams.get('id')
+			try {
+				localStorage.theme = 'light';
 
-			if (window.navigator.userAgent.includes('Mac')) {
-				setUserOS('Mac');
-			} else {
-				setUserOS('Window');
-			}
-			console.log('window.navigator.userAgent', window.navigator.userAgent);
-			// alert(window.navigator.userAgent)
-
-			item_value = searchParams.get('id');
-			let contract_id, member_value;
-			// 아이템이 있으면
-			if (sessionStorage.getItem('member_key')) {
-				member_value = JSON.parse(sessionStorage.getItem('member_key'));
-				setCurrentMember(member_value);
-				// console.log(member_value)
-				if (item_value) {
-					const apiUrlEndpoint = `https://conan.ai/_functions/getContract/${item_value}`;
-					const response = await fetch(apiUrlEndpoint);
-					const res = await response.json();
-					const fetchedData = await res.items;
-					const data = fetchedData.contractData;
-					contract_id = fetchedData.id;
-					console.log('data from wix database : ', fetchedData);
-					let groupdata = _.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko);
-					// 2. inject Data
-					setClauseData(data.clause_array); // data.clause
-					setQuestionData(data.question_array); // data.question
-					setInputData(data.input_array);
-					setQuestionGroupData(_.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
-					setAnsweredQuestionData(data.answeredQuestion_array);
-					//   setQuestionGroupData(data.questionGroup_array)
-					setQuestionGroupKey(Object.keys(groupdata));
-
-					setGlossary(data.clauseGuide_array);
-					// setQuestionGroupData(data.grouped_question)
-
-					// 3. init Variables
-					clause_template = data.clause_template; // 변하지 않는 Original Clause Data
-					isLoaded(true);
-					setContractId(contract_id);
-					setDocStatus('문서 수정');
-					setActivityLog(prev => ({ ...prev, docStatus: '문서 수정' }));
+				if (window.navigator.userAgent.includes('Mac')) {
+					setUserOS('Mac');
 				} else {
-					let query1 = '10';
-					let query2 = contract.type;
-					console.log('new fetch');
-					const data = await fetchProcessedData(query1, query2);
-					contract_id = uuidv4();
-					console.log('[FETCH] data', data);
-					// 2. inject Data
-					setClauseData(data.clause);
-					setQuestionData(data.question);
-					setInputData(data.input_array);
-
-					setQuestionGroupData(data.grouped_question);
-					setQuestionGroupKey(Object.keys(data.grouped_question));
-
-					setGlossary(data.clauseGuide);
-
-					isLoaded(true);
-					setContractId(contract_id);
-					// 3. init Variables
-					clause_template = R.clone(data.clause); // 변하지 않는 Original Clause Data
-					question_template = [...data.question]; // 변하지 않는 Original Question Data
-					setDocStatus('신규 작성');
-					setActivityLog(prev => ({ ...prev, docStatus: '신규 작성' }));
+					setUserOS('Window');
 				}
-				setFormSubmitted(member_value.submittedSurvey);
-				setActivityLog(prev => ({ ...prev, ...{ id: contract_id, title: contract.category + ' 계약서', docId: contract_id, _userName: member_value.name, userEmail: member_value.email } }));
-			} else {
-				setLoginModalOpen(true);
+				console.log('window.navigator.userAgent', window.navigator.userAgent);
+
+				// JWT 토큰 확인
+				const authToken = localStorage.getItem('auth_token');
+				console.log('인증 토큰 존재 여부:', !!authToken);
+
+				// 세션 스토리지 정보 확인
+				console.log('세션 스토리지 키:', Object.keys(sessionStorage));
+				console.log('member_key 존재 여부:', !!sessionStorage.getItem('member_key'));
+
+				// URL에서 id 파라미터 추출 (수정: _id로 변경)
+				item_value = searchParams.get('_id') || searchParams.get('id');
+				console.log('URL에서 추출한 ID 값:', item_value);
+
+				// 세션 스토리지에서 item_key 확인
+				const session_item_value = sessionStorage.getItem('item_key');
+				console.log('세션 스토리지에서 추출한 ID 값:', session_item_value);
+
+				// URL 파라미터가 없으면 세션 스토리지 값 사용
+				if (!item_value && session_item_value) {
+					item_value = session_item_value;
+					console.log('세션 스토리지 값으로 ID 설정:', item_value);
+				}
+
+				let contract_id, member_value;
+
+				// 로그인 여부 확인
+				if (!sessionStorage.getItem('member_key')) {
+					console.log('세션에 사용자 정보가 없습니다 - 로그인 페이지로 리디렉션');
+					// 현재 URL을 세션 스토리지에 저장
+					const currentUrl = window.location.pathname + window.location.search;
+					sessionStorage.setItem('redirectAfterLogin', currentUrl);
+					// 로그인 페이지로 리디렉션
+					window.location.href = '/login';
+					return;
+				}
+
+				// 아이템이 있으면
+				try {
+					member_value = JSON.parse(sessionStorage.getItem('member_key'));
+					console.log('로드된 사용자 정보:', member_value);
+
+					if (!member_value || !member_value.email) {
+						console.error('세션에 사용자 정보가 없거나 불완전합니다');
+						// 로그인 페이지로 리디렉션
+						window.location.href = '/login';
+						return;
+					}
+
+					setCurrentMember(member_value);
+
+					if (item_value) {
+						console.log('기존 문서 로드 중:', item_value);
+
+						try {
+							// 변경: 새로운 API 클라이언트를 사용하여 드래프트 데이터 로드
+							const fetchedData = await draftingApi.getDraft(item_value);
+							console.log('드래프트 데이터 로드 완료:', fetchedData);
+
+							contract_id = fetchedData.id;
+
+							// contractData에서 필요한 데이터 추출
+							const data = fetchedData.contractData;
+
+							console.log('계약서 데이터:', data);
+
+							// 데이터 확인 및 처리
+							if (!data || !data.question_array || !data.clause_array) {
+								console.error('필수 계약서 데이터가 없습니다:', data);
+								alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
+								return;
+							}
+
+							let groupdata = _.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko);
+
+							// 2. inject Data
+							setClauseData(data.clause_array);
+							setQuestionData(data.question_array);
+							setInputData(data.input_array || []);
+							setQuestionGroupData(_.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
+							setAnsweredQuestionData(data.answeredQuestion_array || []);
+							setQuestionGroupKey(Object.keys(groupdata));
+							setGlossary(data.clauseGuide_array || []);
+
+							// 3. init Variables
+							clause_template = data.clause_template; // 변하지 않는 Original Clause Data
+							isLoaded(true);
+							setContractId(contract_id);
+							setDocStatus('문서 수정');
+							setActivityLog(prev => ({ ...prev, docStatus: '문서 수정' }));
+						} catch (error) {
+							console.error('드래프트 데이터 로드 실패:', error);
+							alert('계약서 데이터를 가져오는 데 실패했습니다: ' + error.message);
+							isLoaded(true);
+						}
+					} else {
+						let query1 = '10';
+						let query2 = contract.type;
+						console.log('신규 계약서 작성 - contract 정보:', contract);
+						console.log('API 호출 파라미터 - query1:', query1, 'query2:', query2);
+
+						// 로딩 표시
+						isLoaded(false);
+
+						try {
+							console.log('fetchProcessedData 호출 전');
+							const data = await fetchProcessedData(query1, query2);
+							console.log('fetchProcessedData 호출 후 - 결과:', data);
+
+							// 백엔드 응답 데이터 더 자세히 기록
+							console.log('응답 데이터 구조:', Object.keys(data));
+							console.log('clause 데이터 존재:', !!data.clause, '길이:', data.clause?.length);
+							console.log('question 데이터 존재:', !!data.question, '길이:', data.question?.length);
+							console.log('grouped_question 데이터 존재:', !!data.grouped_question);
+
+							// 데이터 검증
+							if (!data || !data.clause || !data.question) {
+								console.error('필수 데이터가 없습니다:', data);
+								alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
+								return;
+							}
+
+							contract_id = uuidv4();
+							console.log('[FETCH] data', data);
+
+							// 2. 데이터 주입
+							setClauseData(data.clause);
+							setQuestionData(data.question);
+							setInputData(data.input_array || []);
+
+							// 질문 데이터가 있는지 확인하고 처리
+							if (data.question && data.question.length > 0) {
+								// 빈 binding_question_ko 확인 및 설정
+								const processedQuestions = data.question.map(q => {
+									if (!q.binding_question_ko) {
+										console.log(`질문에 binding_question_ko가 없습니다. ID: ${q.id}, 기본값 설정합니다.`);
+										return { ...q, binding_question_ko: '기본 정보' };
+									}
+									return q;
+								});
+
+								// 가공된 질문 데이터로 업데이트
+								if (processedQuestions !== data.question) {
+									console.log('가공된 질문 데이터로 업데이트합니다.');
+									setQuestionData(processedQuestions);
+								}
+
+								// grouped_question이 없는 경우 직접 생성
+								if (!data.grouped_question) {
+									console.log('grouped_question이 없어 직접 생성합니다.');
+									const groupedData = _.groupBy(_.orderBy(processedQuestions, ['midx', 'qidx'], ['asc', 'asc']), q => q.binding_question_ko || '기본 정보');
+									console.log('생성된 grouped_question의 키:', Object.keys(groupedData));
+
+									// 최소한 하나의 그룹이 있는지 확인
+									if (Object.keys(groupedData).length === 0) {
+										console.error('생성된 grouped_question이 비어 있습니다. 기본 그룹 생성');
+										groupedData['기본 정보'] = processedQuestions;
+									}
+
+									setQuestionGroupData(groupedData);
+									setQuestionGroupKey(Object.keys(groupedData));
+								} else {
+									// 기존 그룹화 데이터 사용
+									setQuestionGroupData(data.grouped_question);
+									const groupKeys = Object.keys(data.grouped_question);
+									console.log('기존 grouped_question의 키:', groupKeys);
+
+									if (groupKeys.length === 0) {
+										console.error('백엔드에서 받은 grouped_question이 비어 있습니다. 기본 그룹 생성');
+										const defaultGroup = { '기본 정보': processedQuestions };
+										setQuestionGroupData(defaultGroup);
+										setQuestionGroupKey(['기본 정보']);
+									} else {
+										setQuestionGroupKey(groupKeys);
+									}
+								}
+							} else {
+								console.error('질문 데이터가 비어 있습니다. 기본 그룹 생성');
+								const emptyGroup = { '기본 정보': [] };
+								setQuestionGroupData(emptyGroup);
+								setQuestionGroupKey(['기본 정보']);
+							}
+
+							setGlossary(data.clauseGuide || []);
+
+							isLoaded(true);
+							setContractId(contract_id);
+							// 3. 변수 초기화
+							clause_template = R.clone(data.clause); // 변하지 않는 Original Clause Data
+							question_template = [...data.question]; // 변하지 않는 Original Question Data
+							setDocStatus('신규 작성');
+							setActivityLog(prev => ({ ...prev, docStatus: '신규 작성' }));
+						} catch (error) {
+							console.error('데이터 로딩 오류:', error);
+							console.error('에러 상세:', error.response?.data || error.message);
+							alert('계약서 데이터를 가져오는 데 실패했습니다: ' + error.message);
+							isLoaded(true); // 로딩 상태 해제
+						}
+					}
+					setFormSubmitted(member_value.submittedSurvey);
+					setActivityLog(prev => ({ ...prev, ...{ id: contract_id, title: contract.category + ' 계약서', docId: contract_id, _userName: member_value.name, userEmail: member_value.email } }));
+				} catch (parseError) {
+					console.error('사용자 정보 파싱 오류:', parseError);
+					// 로그인 페이지로 리디렉션
+					window.location.href = '/login';
+					return;
+				}
+			} catch (error) {
+				console.error('페이지 데이터 로딩 중 오류 발생:', error);
+				alert('페이지 로딩 중 오류가 발생했습니다. 페이지를 새로고침하거나 다시 로그인해주세요.');
 			}
 		}
 		getPageData();
@@ -177,7 +315,8 @@ export default function Draft({ contract }) {
 
 	function postSaveLog() {
 		let saveLog = { userName: currentMember.name, userEmail: currentMember.email, category: contract.title, title: `${contract.category} 계약서`, contractId: contractId };
-		post_saveLog(saveLog);
+		console.log('saveLog', saveLog);
+		// post_saveLog(saveLog);
 	}
 
 	// draft log post
@@ -232,28 +371,31 @@ export default function Draft({ contract }) {
 		// }
 	}, [activityLog]);
 
-	function setQuestionProgress() {
-		let allQuestions = questionData.filter(x => x.is_default === true);
-		let answeredQuestions = questionData.filter(x => x.is_default === true && x.value && x.value.length > 0);
-		let progressPercentage = Math.round((answeredQuestions.length / allQuestions.length) * 100);
-		let currentProgress = `${answeredQuestions.length}/${allQuestions.length} (${progressPercentage}%)`;
-		setActivityLog(prev => ({ ...prev, ...{ endTime: timestamp(), docProgress: currentProgress, duration: timeDiffSec(prev.startTime, timestamp()), durationMin: timeDiffMin(prev.startTime, timestamp()) } }));
-	}
 	/* useEffect Hook (3) - 로그 확인용 & 데이터 저장용 HOOK */
 	useEffect(() => {
 		if (loaded === true) {
-			// console.log('ALL DATA LOADED/UPDATED!')
-			// console.log('[로그확인용] inputData UPDATED : ', [inputData]);
-			// console.log('[로그확인용] questionData UPDATED : ', [questionData]);
-			// console.log('[로그확인용] activityLog UPDATED : ', activityLog);
-			// console.log('[로그확인용] clauseData UPDATED : ', [clauseData]);
+			// 상태 업데이트 및 로그 기록
 			setQuestionProgress();
+
+			// 디버깅: 세션 스토리지에서 사용자 정보 확인
+			const memberData = sessionStorage.getItem('member_key');
+			console.log('세션에 저장된 사용자 정보:', memberData ? JSON.parse(memberData) : '없음');
+
+			// member_id 가져오기
+			const member_id = getMemberIdFromStorage();
+			console.log('가져온 member_id:', member_id);
+
+			if (!member_id) {
+				console.error('사용자 ID를 가져올 수 없습니다. 로그인 상태를 확인하세요.');
+			}
+
+			// 저장할 데이터 구조 구성 - Supabase drafting_data 테이블 스키마에 맞춤
 			let toSave = {
-				title: contract.title,
-				contractingParty: 'temp',
-				typeEn: contract.category,
+				id: contractId,
+				contract_title: contract.title,
+				type: contract.category,
 				status: 'stage1',
-				contractData: {
+				contract_data: {
 					questionGroup_array: questionGroupData,
 					question_array: questionData,
 					clause_template: clause_template,
@@ -262,20 +404,68 @@ export default function Draft({ contract }) {
 					clauseGuide_array: glossary,
 					answeredQuestion_array: answeredQuestionData,
 				},
-				// memberId: member_id,
-				memberEmail: currentMember.email,
-				id: contractId,
-				templateInfo: contract,
 				query: contract.type,
-				creator: currentMember.name,
+				contract_info: contract,
+				member_id: member_id, // 명시적으로 member_id 설정
+				progress: activityLog.docProgress,
 			};
-			//   console.log('toSave', toSave)
+
+			console.log('if 밖에서. toSave', toSave);
+			// 저장 버튼이 눌렸을 때
 			if (saveBtnState === true) {
-				saveContractData(toSave);
-				setSaveToastState(true); // lookup
-				setSaveBtnState(false);
-				postSaveLog();
+				// 유효한 member_id가 없으면 저장하지 않고 로그인 페이지로 리디렉션
+				if (!member_id) {
+					console.error('사용자 정보를 찾을 수 없습니다. 로그인이 필요합니다.');
+					alert('사용자 정보를 찾을 수 없습니다. 로그인해 주세요.');
+					setSaveBtnState(false);
+
+					// 현재 URL을 세션 스토리지에 저장 후 로그인 페이지로 리디렉션
+					const currentUrl = window.location.pathname + window.location.search;
+					sessionStorage.setItem('redirectAfterLogin', currentUrl);
+					window.location.href = '/login';
+					return;
+				}
+
+				// 토큰 확인 및 재설정
+				resetAuthToken();
+				console.log('토큰 있음:', localStorage.getItem('auth_token'));
+
+				// 새로운 API 클라이언트를 통해 데이터 저장
+				console.log('저장 요청 데이터:', toSave);
+				draftingApi
+					.saveDraft(toSave)
+					.then(response => {
+						console.log('드래프트 저장 성공:', response);
+						setSaveToastState(true);
+						// postSaveLog();
+					})
+					.catch(error => {
+						console.error('드래프트 저장 실패:', error);
+
+						// 오류 상세 정보 표시
+						let errorMsg = '데이터 저장에 실패했습니다';
+
+						// 로그인 관련 오류인 경우 로그인 페이지로 리디렉션
+						if (error.status === 401 || error.status === 403) {
+							errorMsg += ': 로그인이 필요합니다';
+							alert(errorMsg);
+							setSaveBtnState(false);
+
+							// 현재 URL을 세션 스토리지에 저장 후 로그인 페이지로 리디렉션
+							const currentUrl = window.location.pathname + window.location.search;
+							sessionStorage.setItem('redirectAfterLogin', currentUrl);
+							window.location.href = '/login';
+							return;
+						} else if (error.message) {
+							errorMsg += ': ' + error.message;
+						}
+
+						alert(errorMsg);
+						setSaveBtnState(false);
+					});
 			}
+
+			// 내보내기 버튼이 눌렸을 때
 			if (exportBtnState === true) {
 				exportContent(clauseData, inputData, contract.category);
 				setExportBtnState(false);
@@ -342,8 +532,6 @@ export default function Draft({ contract }) {
 	 */
 	const syncInputSection = (clauseArray, newValue, item, index, id) => {
 		let activeClauses = clauseArray.filter(x => x.is_default === true);
-		// console.log('[syncInputSection] activeClauses', activeClauses)
-		// console.log('[syncInputSection] item', item)
 
 		let clause_keys = [];
 		for (let i = 0; i < activeClauses.length; i++) {
@@ -363,7 +551,6 @@ export default function Draft({ contract }) {
 
 		newState = newState.map(obj => {
 			if (clause_keys.includes(obj.binding_key) && !obj.output_type.includes('trigger')) {
-				// console.log('[syncInputSection] entered syncInput ONE')
 				return { ...obj, is_default: true }; // 전체 key 배열에 binding_key가 있는 질문을 true로 return
 				// && !obj.is_default 추가 안하면 계약 variable에 따라 없어지는 질문 생김
 			} else if (!clause_keys.includes(obj.binding_key) && !obj.output_type.includes('trigger') && !obj.is_fixed) {
@@ -448,24 +635,14 @@ export default function Draft({ contract }) {
 				// const newState = [...clauseData]
 				// console.log(`newState[${i}] before : `, newState[i].content_en)
 				newState[i].content_en = removeHighlight(newState[i].content_en, lastInput['obj'], lastInput['key']); // removeHighlight => clauseData 에서 바꿔줘야지 조항 데이터가 유지됨
-				// console.log(`newState[${i}] after : `, newState[i].content_en)
 
 				newState[i] = R.set(R.lensProp('id'), uuidv4(), newState[i]);
 				// setClauseData(newState)
 			});
 			cidx.forEach(i => {
 				tracer = getKeyAndValue(clauseData[i].binding_input); // [key: [...], value: [...]]
-				// console.log('  tracer A', tracer)
-				// console.log(`  clauseData[${i}] to update`, clauseData[i])
-
-				// const newState = [...clauseData]
-				// newState[i].content_en = replaceMulCharInString(newState[i].content_en, tracer, tracerKey)
 				newState[i].content_en = replaceMulCharInString(clause_template[i].content_en, tracer, tracerKey); // replaceMulCharInString = clause_template 에서
-
 				newState[i] = R.set(R.lensProp('id'), uuidv4(), newState[i]);
-
-				// console.log('clause_template[i].content_en', clause_template[i].content_en)
-				// console.log('newState[i].content_en', newState[i].content_en)
 				// setClauseData(newState)
 			});
 		} else {
@@ -473,8 +650,6 @@ export default function Draft({ contract }) {
 			console.log('[[LAST INPUT]]', lastInput);
 			cidx.forEach(i => {
 				tracer = getKeyAndValue(clauseData[i].binding_input); // [key: [...], value: [...]]
-				// console.log('[handleHighlight] tracer B', tracer)
-				// console.log(`[handleHighlight] clauseData[${i}] to update`, clauseData[i])
 
 				// 핵심 로직 1 : clause_template의 content_en은 항상 빈칸("DEFAULT")임. clause_template 배열은 변형하지 X, 원본 데이터로 참고함.
 				// 핵심 로직 2 : tracer의 key: [...] value: [...] 가 비어있으면 "DEFAULT" 수정 없이 반환.
@@ -589,7 +764,50 @@ export default function Draft({ contract }) {
 			handleInputData(item.binding_key, binding_value);
 			updateLastInput(item.binding_key, item.binding_cidx);
 		}
+
+		// 질문 응답 후 진행률 업데이트
+		setTimeout(() => {
+			setQuestionProgress();
+		}, 100);
 	};
+
+	function setQuestionProgress() {
+		let allQuestions = questionData.filter(x => x.is_default === true);
+		let answeredQuestions = questionData.filter(x => x.is_default === true && x.value && x.value.length > 0);
+		let progressPercentage = Math.round((answeredQuestions.length / allQuestions.length) * 100);
+		let currentProgress = `${answeredQuestions.length}/${allQuestions.length} (${progressPercentage}%)`;
+
+		// 진행률(progress) 상태도 업데이트 - 실제 답변한 질문 비율 기준
+		// setProgress(progressPercentage); // 나중에 사용할 주석.
+
+		// 기존 활동 로그 기록 유지
+		setActivityLog(prev => ({ ...prev, ...{ endTime: timestamp(), docProgress: currentProgress, duration: timeDiffSec(prev.startTime, timestamp()), durationMin: timeDiffMin(prev.startTime, timestamp()) } }));
+	}
+
+	// ("이전질문", "다음질문" 버튼 눌렀을 때 작동) 버튼 event handler
+	function onQBtnClickHandler(e) {
+		let idArray = getArrayOfKeys(questionData.filter(x => x.is_default === true));
+
+		if (e.target.id === 'previous' && itemIndex !== 0) {
+			console.log('[onQBtnClickHandler] entered 1');
+			//   console.log(itemIndex - 1)
+			setLastItemIndex(itemIndex);
+			setItemIndex(itemIndex - 1);
+			let progressNum = (itemIndex - 1) / (questionGroupKey.length - 1);
+			console.log('[onQBtnClickHandler] progress : ', Math.round(progressNum * 100));
+			setProgress(Math.round(progressNum * 100));
+		} else if (e.target.id === 'next' && itemIndex !== questionGroupKey.length - 1) {
+			console.log('[onQBtnClickHandler] entered 2');
+			//   console.log(itemIndex + 1)
+			setLastItemIndex(itemIndex);
+			setItemIndex(itemIndex + 1);
+			let progressNum = (itemIndex + 1) / (questionGroupKey.length - 1);
+			console.log('[onQBtnClickHandler] progress : ', Math.round(progressNum * 100));
+			setProgress(Math.round(progressNum * 100));
+		} else if (e.target.id === 'next' && itemIndex === questionGroupKey.length - 1) {
+			setQuestionPanel(false);
+		}
+	}
 
 	/**
 	 * 일반질문 답변 -> 체크박스 '기타' 옵션의 value = 'checked' 처리
@@ -651,31 +869,6 @@ export default function Draft({ contract }) {
 		handleInputData(item.binding_key, binding_value);
 		updateLastInput(item.binding_key, item.binding_cidx);
 	};
-
-	// ("이전질문", "다음질문" 버튼 눌렀을 때 작동) 버튼 event handler
-	function onQBtnClickHandler(e) {
-		let idArray = getArrayOfKeys(questionData.filter(x => x.is_default === true));
-
-		if (e.target.id === 'previous' && itemIndex !== 0) {
-			console.log('[onQBtnClickHandler] entered 1');
-			//   console.log(itemIndex - 1)
-			setLastItemIndex(itemIndex);
-			setItemIndex(itemIndex - 1);
-			let progressNum = (itemIndex - 1) / (questionGroupKey.length - 1);
-			console.log('[onQBtnClickHandler] progress : ', Math.round(progressNum * 100));
-			setProgress(Math.round(progressNum * 100));
-		} else if (e.target.id === 'next' && itemIndex !== questionGroupKey.length - 1) {
-			console.log('[onQBtnClickHandler] entered 2');
-			//   console.log(itemIndex + 1)
-			setLastItemIndex(itemIndex);
-			setItemIndex(itemIndex + 1);
-			let progressNum = (itemIndex + 1) / (questionGroupKey.length - 1);
-			console.log('[onQBtnClickHandler] progress : ', Math.round(progressNum * 100));
-			setProgress(Math.round(progressNum * 100));
-		} else if (e.target.id === 'next' && itemIndex === questionGroupKey.length - 1) {
-			setQuestionPanel(false);
-		}
-	}
 
 	// 기타 ("조항 빈칸" 누르면 해당되는 질문으로 이동) Lookupå
 	const clauseClickHandler = e => {
@@ -752,139 +945,48 @@ export default function Draft({ contract }) {
 					<link rel="icon" href="/favicon.ico" />
 				</Head>
 				<ToastSave saveToastState={saveToastState} setSaveToastState={setSaveToastState} />
-				<LoginModal loginModalOpen={loginModalOpen} setLoginModalOpen={setLoginModalOpen} />
-				<div className="h-[60px] w-full flex p-5 items-center border-b-2 justify-between">
-					{/* 홈 링크 */}
-					<Link href="/" className="flex items-center">
-						{/* <Image alt="타입리걸" src="/icon/typelegal.png" width={0} height={0} sizes="100vw" style={{ width: '150px', height: 'auto' }} /> */}
-						<Image alt="타입리걸" src="/icon/typelegal.png" width={0} height={0} sizes="100vw" className="w-[150px] h-auto" />
-					</Link>
-					{/* <h2 className="mx-auto text-2xl font-bold">로고 디자인 계약서</h2> */}
-					{/* 메뉴 바 */}
-					<div className="flex w-fit">
-						<div className="flex items-center mr-4 space-x-1">
-							<button
-								onClick={() => {
-									if (sessionStorage.getItem('item_key')) {
-										sessionStorage.removeItem('item_key');
-									}
-									// refreshVariables()
-									window.location.reload();
-								}}
-								className="items-center cursor-pointer flex px-2 py-1 text-sm text-gray-700 capitalize transition-colors duration-200 bg-white rounded-md gap-x-2 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800"
-							>
-								<Image alt="내용 초기화" src="/icon/refresh.svg" width={0} height={0} sizes="100vw" className="w-4 h-4" />
-								내용 초기화
-							</button>
-							<button
-								id="btnPrevious"
-								name="paginationBtn"
-								onClick={currentMember.submittedSurvey === false && formSubmitted === false ? () => setIsOpen(true) : () => setExportBtnState(true)}
-								// onClick={exportContent(clauseData, inputData)}
-								className="items-center cursor-pointer flex px-2 py-1 text-sm text-gray-700 capitalize transition-colors duration-200 bg-white rounded-md gap-x-2 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800"
-							>
-								{/* ${showSidebar ? 'translate-x-0 ' : 'translate-x-full'} */}
-								<Image alt="다운로드" src="/icon/download.svg" width={0} height={0} sizes="100vw" className="w-6 h-6" />
-								문서 다운로드
-							</button>
-							<SurveyModal isOpen={isOpen} setIsOpen={setIsOpen} setFormSubmitted={setFormSubmitted} setExportBtnState={setExportBtnState} user={currentMember} contract={contract} contractId={contractId} />
-							<SaveButton questionData={questionData} clauseData={clauseData} inputData={inputData} contractId={contractId} setSaveBtnState={setSaveBtnState} />
-						</div>
-						{currentMember && (
-							<nav className="flex items-center">
-								<Link href="/dashboard" className="hover:text-gray-900">
-									<div className="btn-blue w-24 py-1 rounded-md text-sm shadow drop-shadow-lg">마이페이지</div>
-								</Link>
-							</nav>
-						)}
-					</div>
-				</div>
+
+				{/* 헤더 컴포넌트 */}
+				<DraftHeader
+					currentMember={currentMember}
+					formSubmitted={formSubmitted}
+					setIsOpen={setIsOpen}
+					isOpen={isOpen}
+					setFormSubmitted={setFormSubmitted}
+					setExportBtnState={setExportBtnState}
+					contract={contract}
+					contractId={contractId}
+					questionData={questionData}
+					clauseData={clauseData}
+					inputData={inputData}
+					setSaveBtnState={setSaveBtnState}
+				/>
+
 				{loaded === true ? (
 					<>
 						{/* 2. 메인페이지 전체 */}
 						<SidePanel submittedData={answeredQuestionData} onEditClickHandler={onEditClickHandler} showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
 						<div className="grid grid-cols-[260px_1fr_1.2fr] h-[100%] w-screen overflow-hidden">
 							{/* 2.1. 왼쪽 패널 전체 */}
-							<div className="px-5 pt-10 pb-4 flex flex-col justify-between border-r-2">
-								{/* 측면 상판 */}
-								<div className="space-y-4">
-									<div className="flex justify-between items-center">
-										<p className="text-base font-bold">답변을 완료했어요!</p>
-										<button onClick={() => setShowSidebar(!showSidebar)} className="text-xs font-semibold cursor-pointer px-2 py-1 border border-gray-400 round rounded-md">
-											수정하기
-										</button>
-									</div>
-									<div className="w-8 h-1 bg-gray-300"></div>
-									<ProgressBar currProgress={progress} />
-									<ProgressList activeClauseKeys={activeClauseKeys} questionData={questionData} questionGroupKey={questionGroupKey} />
-								</div>
-								{/* 측면 하판 */}
-								<div className="grid space-y-5">
-									<div className="font-bold">문제가 발생했나요?</div>
-									<div className="w-8 h-1 bg-gray-300"></div>
-									<div className="text-sm font-medium text-gray-500 space-y-0.5">
-										<div>문의가능: M-F, 09:00-19:00</div>
-										<div>이메일: team@typelegal.io</div>
-									</div>
-								</div>
-							</div>
+							<DraftSidebar activeClauseKeys={activeClauseKeys} questionData={questionData} questionGroupKey={questionGroupKey} progress={progress} showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
+
 							{/* 2.2. 중앙 패널 전체 */}
-							<div id="left" className={`flex flex-col bg-white overflow-y-scroll pt-10 px-8 relative z-10 border-r-2 scrollbar-hide ${questionPanel === true ? 'pt-10 pb-4' : 'pt-8 pb-8'}`}>
-								{questionPanel === true ? (
-									<>
-										{Object.keys(questionGroupData).map(key => {
-											//   console.log('key', key)
-											if (key === questionGroupKey[itemIndex]) {
-												// 질문 컨테이너
-												return (
-													<div className="flex flex-col overflow-y-scroll h-full pb-8 scrollbar-hide" key={key}>
-														<div className="flex place-items-center px-5 w-full">
-															<p className="text-black text-2xl font-bold">{key}</p>
-														</div>
-														<div className="mb-2 pt-8 pb-5 px-5 space-y-10">
-															<QuestionItem questionGroupData={questionGroupData[key]} etcClick={etcClick} etcChange={etcChange} onChange={onChangeHandler} toggleQuestionTip={toggleQuestionTip} />
-														</div>
-													</div>
-												);
-											}
-										})}
-										<QCardBtn onQBtnClickHandler={onQBtnClickHandler} />
-									</>
-								) : (
-									<>
-										<button
-											onClick={() => setQuestionPanel(true)}
-											className="w-[140px] place-content-center cursor-pointer flex items-center py-2 ml-4 text-xs text-gray-700 capitalize transition-colors duration-200 bg-white border rounded-md gap-x-2 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800"
-										>
-											<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="pointer-events-none w-4 h-4 rtl:-scale-x-100">
-												<path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
-											</svg>
-											질문으로 돌아가기
-										</button>
-										{/* <button onClick={() => setQuestionPanel(true)}>질문으로 돌아가기</button> */}
-										<div className="flex flex-col overflow-y-scroll h-full mt-4 scrollbar-hide">
-											<div className="mb-2 mt-4 px-4 space-y-6">
-												<p className="text-base font-semibold">항목 기입을 완료하면 계약서 작성 끝! ✨</p>
-												<QuestionInput questionGroupData={questionData} etcClick={etcClick} etcChange={etcChange} onChange={onChangeHandler} toggleQuestionTip={toggleQuestionTip} />
-											</div>
-										</div>
-									</>
-								)}
-							</div>
+							<DraftContent
+								questionPanel={questionPanel}
+								questionGroupData={questionGroupData}
+								questionGroupKey={questionGroupKey}
+								itemIndex={itemIndex}
+								etcClick={etcClick}
+								etcChange={etcChange}
+								onChangeHandler={onChangeHandler}
+								toggleQuestionTip={toggleQuestionTip}
+								onQBtnClickHandler={onQBtnClickHandler}
+								setQuestionPanel={setQuestionPanel}
+								questionData={questionData}
+							/>
+
 							{/* 2.3. 우측 패널 전체 */}
-							<div id="right" className="grid col-span-1 w-full px-6 shadow-2xl">
-								{/* 0. 종이 */}
-								<div id="right2" className="h-[calc(100vh-120px)] select-none overflow-y-scroll bg-white px-6 w-full scrollbar-hide">
-									{/* 1. 계약 제목 */}
-									<div className="text-center px-8 pt-10 pb-4 w-full">
-										<p className="text-gray-900 text-xl mb-5 font-bold title-font">{contract.category} 계약서</p>
-									</div>
-									{/* 2. 조항 (제목 + 본문) */}
-									{clauseData.map((elem, index) => {
-										return <CCard dataList={elem} index={index} onClauseClick={clauseClickHandler} key={uuidv4()} newClause={newClause} />;
-									})}
-								</div>
-							</div>
+							<DraftPreview clauseData={clauseData} newClause={newClause} contract={contract} onClauseClick={clauseClickHandler} />
 						</div>
 					</>
 				) : (
@@ -892,57 +994,15 @@ export default function Draft({ contract }) {
 						<Spinner />
 					</>
 				)}
+
 				{/* 3. FOOTER 하단 패널 전체 */}
-				<div className="h-[60px] w-full flex p-5 items-center border text-xs font-medium justify-between">
-					<div>
-						<p></p>
-					</div>
-					<div className="flex">
-						<div className="flex divide-x items-center divide-gray-400 h-fit pr-1">
-							<Link href="/policy/terms" target="_blank" className="flex pr-3 text-center text-gray-900 dark:text-white">
-								이용약관
-							</Link>
-							<Link href="/policy/privacy" target="_blank" className="flex pl-3 text-gray-900 dark:text-white">
-								개인정보처리방침
-							</Link>
-						</div>
-					</div>
-				</div>
+				<DraftFooter />
 			</div>
 		</>
 	);
 }
 
-// export const getServerSideProps = async ({ query }) => {
-//   console.log('query', query)
-//   const { type } = query
-
-//   // const data = await response.json()
-//   const apiUrlEndpoint = `https://conan.ai/_functions/getTemplateInfo/${type}`
-//   const response = await fetch(apiUrlEndpoint)
-//   const res = await response.json()
-//   const data = res.items
-//   // console.log('data', data)
-
-//   return { props: { contract: data } }
-// }
-const SaveButton = ({ questionData, clauseData, inputData, contractId, setSaveBtnState }) => {
-	return (
-		<button
-			onClick={() => setSaveBtnState(true)}
-			className="items-center cursor-pointer flex px-2 py-1 text-sm text-gray-700 capitalize transition-colors duration-200 bg-white rounded-md gap-x-2 hover:bg-gray-100 dark:bg-gray-900 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800"
-		>
-			<Image alt="문서저장" src="/icon/save.svg" width={0} height={0} sizes="100vw" className="w-6 h-6" />
-			저장하기
-		</button>
-	);
-};
-
 export async function getStaticPaths() {
-	// const fetcher = url => fetch(url).then(res => res.json())
-	// const { data, error, isLoading } = useSWR('https://conan.ai/_functions/getAllTemplateInfo', fetcher)
-	// console.log('data', data)
-
 	const response = await fetch('https://conan.ai/_functions/getAllTemplateInfo');
 	const res = await response.json();
 	const data = res.items;
@@ -958,9 +1018,6 @@ export async function getStaticProps({ params }) {
 	const response = await fetch(`https://conan.ai/_functions/getTemplateInfo/${params.type}`);
 	const res = await response.json();
 	const data = res.items;
-
-	// const fetcher = url => fetch(url).then(res => res.json())
-	// const { data, error, isLoading } = useSWR(`https://conan.ai/_functions/getTemplateInfo/${params.type}`, fetcher)
 
 	return { props: { contract: data } };
 }
