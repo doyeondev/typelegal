@@ -1,0 +1,21 @@
+{
+	"name": "typelegal-backend-e2e-tests",
+	"version": "1.0.0",
+	"description": "TypeLegal Backend E2E Tests with Playwright",
+	"main": "api-tests.spec.js",
+	"scripts": {
+		"test": "playwright test"
+	},
+	"keywords": [
+		"test",
+		"api",
+		"e2e",
+		"playwright"
+	],
+	"author": "TypeLegal Team",
+	"license": "UNLICENSED",
+	"devDependencies": {
+		"@playwright/test": "^1.35.0",
+		"axios": "^1.4.0"
+	}
+}

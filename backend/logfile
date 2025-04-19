@@ -1,9 +1,0 @@
-2025-03-02 15:15:27.592 KST [2833] FATAL:  lock file "postmaster.pid" already exists
-2025-03-02 15:15:27.592 KST [2833] HINT:  Is another postmaster (PID 2799) running in data directory "/opt/homebrew/var/postgresql@14"?
-2025-03-02 15:16:13.673 KST [2924] FATAL:  lock file "postmaster.pid" already exists
-2025-03-02 15:16:13.673 KST [2924] HINT:  Is another postmaster (PID 2903) running in data directory "/opt/homebrew/var/postgresql@14"?
-2025-03-02 15:16:23.431 KST [2946] FATAL:  lock file "postmaster.pid" already exists
-2025-03-02 15:16:23.431 KST [2946] HINT:  Is another postmaster (PID 2903) running in data directory "/opt/homebrew/var/postgresql@14"?
-2025-03-02 15:16:52.018 KST [2996] FATAL:  pre-existing shared memory block (key 76048600, ID 524288) is still in use
-2025-03-02 15:16:52.018 KST [2996] HINT:  Terminate any old server processes associated with data directory "/opt/homebrew/var/postgresql@14".
-2025-03-02 15:16:52.020 KST [2996] LOG:  database system is shut down

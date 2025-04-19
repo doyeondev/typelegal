@@ -1,0 +1,28 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+	reactStrictMode: true,
+	// future: {
+	//   webpack5: true, // by default, if you customize webpack config, they switch back to version 4.
+	//   // Looks like backward compatibility approach.
+	// },
+	// webpack5: false,
+	webpack(config) {
+		config.resolve.fallback = {
+			...config.resolve.fallback, // if you miss it, all the other options in fallback, specified
+			// by next.js will be dropped. Doesn't make much sense, but how it is
+			fs: false, // the solution
+		};
+
+		return config;
+	},
+	compiler: {
+		// SWC 컴파일러를 사용
+		styledComponents: true,
+	},
+	// SWC를 명시적으로 활성화
+	experimental: {
+		forceSwcTransforms: true,
+	},
+};
+
+module.exports = nextConfig;
