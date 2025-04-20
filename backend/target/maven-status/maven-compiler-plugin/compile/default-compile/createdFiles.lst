@@ -37,6 +37,7 @@ com/typelegal/BackendApplication$MockRepositoryConfig.class
 com/typelegal/domain/clause/dto/ClauseRequestDto$ClauseRequestDtoBuilder.class
 com/typelegal/domain/member/dto/RegisterRequest$RegisterRequestBuilder.class
 com/typelegal/global/security/PasswordConfig.class
+com/typelegal/global/common/ApiResponse.class
 com/typelegal/domain/member/exception/MemberNotFoundException.class
 com/typelegal/domain/question/application/QuestionService.class
 com/typelegal/global/security/JwtAuthenticationFilter.class

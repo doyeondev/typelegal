@@ -2,14 +2,12 @@
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/question/api/QuestionControllerTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/drafting/api/DraftingControllerTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/global/security/JwtConfigTest.java
-/Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/question/dao/QuestionRepositoryTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/question/exception/QuestionNotFoundExceptionTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/member/application/MemberServiceTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/global/converter/JsonbArrayConverterTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/drafting/application/DraftingServiceTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/template/application/TemplateProcessingServiceTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/global/security/PasswordConfigTest.java
-/Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/question/repository/QuestionRepositoryTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/TypeLegalApplicationTests.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/member/api/AuthControllerTest.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/test/java/com/typelegal/domain/clause/api/ClauseControllerTest.java

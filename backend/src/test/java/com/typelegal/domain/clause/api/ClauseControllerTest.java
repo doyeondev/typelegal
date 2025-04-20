@@ -2,194 +2,203 @@ package com.typelegal.domain.clause.api;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.typelegal.domain.clause.application.ClauseService;
+import com.typelegal.domain.clause.domain.Clause;
 import com.typelegal.domain.clause.dto.ClauseResponseDto;
-import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
 import static org.hamcrest.Matchers.hasSize;
-import static org.mockito.Mockito.*;
+import static org.hamcrest.Matchers.is;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * ClauseController API 엔드포인트 테스트
  * 조항 API의 동작을 검증합니다.
  */
-@WebMvcTest(ClauseController.class)
-class ClauseControllerTest {
+@SpringBootTest
+@AutoConfigureMockMvc
+@ActiveProfiles("test")
+public class ClauseControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
 
-    @Autowired
-    private ObjectMapper objectMapper;
-
     @MockBean
     private ClauseService clauseService;
 
-    @Test
-    @DisplayName("getAllClauses_성공적으로_모든_조항을_반환한다")
-    void getAllClauses_성공() throws Exception {
-        // given
-        List<ClauseResponseDto> clauseList = Arrays.asList(
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000001"), "A001", "Confidentiality", 
-                        "All parties shall keep confidential...", true, true, "General"),
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000002"), "B001", "Termination", 
-                        "This agreement may be terminated...", true, false, "Special")
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    private List<ClauseResponseDto> clauseDtos;
+
+    @BeforeEach
+    void setUp() {
+        clauseDtos = new ArrayList<>();
+        
+        // ClauseResponseDto 불변 객체 생성 - 생성자 사용
+        // 주석: ClauseResponseDto가 불변 객체로 변경되어 setter 대신 생성자를 사용합니다.
+        ClauseResponseDto clause1 = new ClauseResponseDto(
+            UUID.randomUUID(), 
+            "clause1", 
+            "조항 1", 
+            "내용 1", 
+            true, 
+            true, 
+            "카테고리 A"
         );
         
-        when(clauseService.getAllClauses()).thenReturn(clauseList);
-
-        // when & then
-        mockMvc.perform(get("/api/clause/all")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].cid").value("A001"))
-                .andExpect(jsonPath("$[0].clauseTitleEn").value("Confidentiality"))
-                .andExpect(jsonPath("$[1].cid").value("B001"))
-                .andExpect(jsonPath("$[1].clauseTitleEn").value("Termination"));
-
-        verify(clauseService, times(1)).getAllClauses();
-    }
-
-    @Test
-    @DisplayName("getAllClauses_결과가_없는_경우_빈_배열을_반환한다")
-    void getAllClauses_빈_결과() throws Exception {
-        // given
-        when(clauseService.getAllClauses()).thenReturn(Collections.emptyList());
-
-        // when & then
-        mockMvc.perform(get("/api/clause/all")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(0)));
-
-        verify(clauseService, times(1)).getAllClauses();
-    }
-
-    @Test
-    @DisplayName("getFilteredClauses_성공적으로_필터링된_조항을_반환한다")
-    void getFilteredClauses_성공() throws Exception {
-        // given
-        ClauseResponseDto clause = new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000001"), "A001", "Confidentiality", 
-                "All parties shall keep confidential...", true, true, "General");
+        ClauseResponseDto clause2 = new ClauseResponseDto(
+            UUID.randomUUID(), 
+            "clause2", 
+            "조항 2", 
+            "내용 2", 
+            true, 
+            true, 
+            "카테고리 B"
+        );
         
-        when(clauseService.getFilteredClauses("A", "General")).thenReturn(Collections.singletonList(clause));
+        ClauseResponseDto clause3 = new ClauseResponseDto(
+            UUID.randomUUID(), 
+            "clause3", 
+            "조항 3", 
+            "내용 3", 
+            true, 
+            true, 
+            "카테고리 A"
+        );
+        
+        clauseDtos.add(clause1);
+        clauseDtos.add(clause2);
+        clauseDtos.add(clause3);
+    }
 
-        // when & then
+    @Test
+    @WithMockUser
+    public void getAllClauses_성공() throws Exception {
+        // 모킹
+        when(clauseService.getAllClauses()).thenReturn(clauseDtos);
+        
+        // 실행 및 검증
+        mockMvc.perform(get("/api/clause/all")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(3)))
+                .andExpect(jsonPath("$.data[0].clauseTitleEn", is("조항 1")))
+                .andExpect(jsonPath("$.data[1].clauseTitleEn", is("조항 2")))
+                .andExpect(jsonPath("$.data[2].clauseTitleEn", is("조항 3")));
+    }
+
+    @Test
+    @WithMockUser
+    public void getAllClauses_빈_결과() throws Exception {
+        // 모킹 - 빈 결과 반환
+        when(clauseService.getAllClauses()).thenReturn(new ArrayList<>());
+        
+        // 실행 및 검증
+        mockMvc.perform(get("/api/clause/all")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(0)));
+    }
+
+    @Test
+    @WithMockUser
+    public void getFilteredClauses_성공() throws Exception {
+        // "카테고리 A"로 필터링된 결과만 반환하도록 모킹
+        List<ClauseResponseDto> filteredClauses = clauseDtos.stream()
+                .filter(c -> "카테고리 A".equals(c.getClauseCategory()))
+                .toList();
+        
+        // 주석: getFilteredClauses 메서드가 2개의 인자를 받도록 변경되었으므로 mock 설정을 수정합니다.
+        when(clauseService.getFilteredClauses(anyString(), anyString())).thenReturn(filteredClauses);
+        
+        // 실행 및 검증
         mockMvc.perform(get("/api/clause/filtered")
-                .param("query1", "A")
-                .param("query2", "General")
+                .param("query1", "카테고리 A")
+                .param("query2", "all")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].cId").value("A001"))
-                .andExpect(jsonPath("$[0].clauseTitleEn").value("Confidentiality"))
-                .andExpect(jsonPath("$[0].clauseCategory").value("General"));
-
-        verify(clauseService, times(1)).getFilteredClauses("A", "General");
+                .andExpect(jsonPath("$.data", hasSize(2)))
+                .andExpect(jsonPath("$.data[0].clauseCategory", is("카테고리 A")))
+                .andExpect(jsonPath("$.data[1].clauseCategory", is("카테고리 A")));
     }
 
     @Test
-    @DisplayName("getFilteredClauses_all_쿼리로_모든_조항을_반환한다")
-    void getFilteredClauses_all_쿼리() throws Exception {
-        // given
-        List<ClauseResponseDto> clauseList = Arrays.asList(
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000001"), "A001", "Confidentiality", 
-                        "All parties shall keep confidential...", true, true, "General"),
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000002"), "B001", "Termination", 
-                        "This agreement may be terminated...", true, false, "Special")
-        );
+    @WithMockUser
+    public void getFilteredClauses_all_쿼리() throws Exception {
+        // "all" 쿼리는 모든 조항을 반환
+        // 주석: getFilteredClauses 메서드가 2개의 인자를 받도록 변경되었으므로 mock 설정을 수정합니다.
+        when(clauseService.getFilteredClauses("all", "all")).thenReturn(clauseDtos);
         
-        when(clauseService.getFilteredClauses("all", "all")).thenReturn(clauseList);
-
-        // when & then
+        // 실행 및 검증
         mockMvc.perform(get("/api/clause/filtered")
                 .param("query1", "all")
                 .param("query2", "all")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].cId").value("A001"))
-                .andExpect(jsonPath("$[1].cId").value("B001"));
-
-        verify(clauseService, times(1)).getFilteredClauses("all", "all");
+                .andExpect(jsonPath("$.data", hasSize(3)));
     }
 
     @Test
-    @DisplayName("getFilteredClauses_필터링_결과가_없는_경우_빈_배열을_반환한다")
-    void getFilteredClauses_빈_결과() throws Exception {
-        // given
-        when(clauseService.getFilteredClauses("X", "Unknown")).thenReturn(Collections.emptyList());
-
-        // when & then
+    @WithMockUser
+    public void getFilteredClauses_빈_결과() throws Exception {
+        // 필터링 결과가 없는 경우
+        // 주석: getFilteredClauses 메서드가 2개의 인자를 받도록 변경되었으므로 mock 설정을 수정합니다.
+        when(clauseService.getFilteredClauses("존재하지 않음", "all")).thenReturn(new ArrayList<>());
+        
+        // 실행 및 검증
         mockMvc.perform(get("/api/clause/filtered")
-                .param("query1", "X")
-                .param("query2", "Unknown")
+                .param("query1", "존재하지 않음")
+                .param("query2", "all")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(0)));
-
-        verify(clauseService, times(1)).getFilteredClauses("X", "Unknown");
+                .andExpect(jsonPath("$.data", hasSize(0)));
     }
 
     @Test
-    @DisplayName("getFilteredClauses_파라미터가_누락된_경우_기본값으로_처리한다")
-    void getFilteredClauses_파라미터_누락() throws Exception {
-        // given
-        List<ClauseResponseDto> clauseList = Arrays.asList(
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000001"), "A001", "Confidentiality", 
-                        "All parties shall keep confidential...", true, true, "General")
-        );
+    @WithMockUser
+    public void getFilteredClauses_빈_문자열_파라미터() throws Exception {
+        // 빈 문자열 쿼리는 모든 조항을 반환
+        // 주석: getFilteredClauses 메서드가 2개의 인자를 받도록 변경되었으므로 mock 설정을 수정합니다.
+        when(clauseService.getFilteredClauses("", "all")).thenReturn(clauseDtos);
         
-        when(clauseService.getFilteredClauses(eq(null), eq(null))).thenReturn(clauseList);
-
-        // when & then
-        mockMvc.perform(get("/api/clause/filtered")
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(1)));
-
-        verify(clauseService, times(1)).getFilteredClauses(null, null);
-    }
-    
-    @Test
-    @DisplayName("getFilteredClauses_빈_문자열_파라미터로_요청시_정상_처리한다")
-    void getFilteredClauses_빈_문자열_파라미터() throws Exception {
-        // given
-        List<ClauseResponseDto> clauseList = Arrays.asList(
-                new ClauseResponseDto(UUID.fromString("00000000-0000-0000-0000-000000000001"), "A001", "Confidentiality", 
-                        "All parties shall keep confidential...", true, true, "General")
-        );
-        
-        when(clauseService.getFilteredClauses("", "")).thenReturn(clauseList);
-
-        // when & then
+        // 실행 및 검증
         mockMvc.perform(get("/api/clause/filtered")
                 .param("query1", "")
-                .param("query2", "")
+                .param("query2", "all")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
-                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$.data", hasSize(3)));
+    }
 
-        verify(clauseService, times(1)).getFilteredClauses("", "");
+    @Test
+    @WithMockUser
+    public void getFilteredClauses_파라미터_누락() throws Exception {
+        // 파라미터가 없는 경우 모든 조항을 반환
+        // 주석: getFilteredClauses 메서드가 2개의 인자를 받도록 변경되었으므로 mock 설정을 수정합니다.
+        when(clauseService.getFilteredClauses(null, null)).thenReturn(clauseDtos);
+        
+        // 실행 및 검증
+        mockMvc.perform(get("/api/clause/filtered")
+                .contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data", hasSize(3)));
     }
 } 

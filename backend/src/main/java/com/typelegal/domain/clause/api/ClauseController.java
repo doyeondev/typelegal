@@ -3,6 +3,7 @@ package com.typelegal.domain.clause.api;
 import com.typelegal.domain.clause.domain.Clause;
 import com.typelegal.domain.clause.application.ClauseService;
 import com.typelegal.domain.clause.dto.ClauseResponseDto;
+import com.typelegal.global.common.ApiResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,9 +30,10 @@ public class ClauseController {
      * @return 조항 목록 DTO
      */
     @GetMapping("/all")
-    public List<ClauseResponseDto> getAllClauses() {
+    public ResponseEntity<ApiResponse<List<ClauseResponseDto>>> getAllClauses() {
         System.out.println("조항 전체 조회 API 호출됨");
-        return clauseService.getAllClauses();
+        List<ClauseResponseDto> result = clauseService.getAllClauses();
+        return ResponseEntity.ok(ApiResponse.of(result));
     }
 
     /**
@@ -41,10 +43,10 @@ public class ClauseController {
      * @return 필터링된 조항 목록 DTO
      */
     @GetMapping("/filtered")
-    public ResponseEntity<List<ClauseResponseDto>> getFilteredClauses(
-            @RequestParam String query1, 
-            @RequestParam String query2) {
+    public ResponseEntity<ApiResponse<List<ClauseResponseDto>>> getFilteredClauses(
+            @RequestParam(required = false) String query1, 
+            @RequestParam(required = false) String query2) {
         List<ClauseResponseDto> result = clauseService.getFilteredClauses(query1, query2);
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(ApiResponse.of(result));
     }
 } 

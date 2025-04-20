@@ -1,5 +1,5 @@
 # =======================================
-# 🌐 TypeLegal Monorepo Git Ignore
+# TypeLegal Monorepo Git Ignore
 # Backend (Spring Boot), Frontend (Next.js), Docker, Test 환경 반영
 # =======================================
 
@@ -85,3 +85,8 @@ dockerfile~
 *.tsbuildinfo
 next-env.d.ts
 .next/
+.cursor.md
+_test_log
+_doc
+__mocks__
+coverage

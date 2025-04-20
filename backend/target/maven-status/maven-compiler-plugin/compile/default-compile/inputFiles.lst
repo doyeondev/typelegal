@@ -10,6 +10,7 @@
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/domain/member/application/MemberService.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/domain/drafting/exception/DraftingNotFoundException.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/domain/drafting/dto/DraftingDto.java
+/Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/global/common/ApiResponse.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/domain/drafting/dao/DraftingRepository.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/BackendApplication.java
 /Users/conan/Desktop/개발/server-root/typelegal/backend/src/main/java/com/typelegal/domain/question/api/QuestionController.java

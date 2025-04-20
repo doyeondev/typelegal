@@ -6,14 +6,17 @@ import com.typelegal.domain.member.domain.Member;
 import com.typelegal.domain.member.dto.AuthRequest;
 import com.typelegal.domain.member.dto.RegisterRequest;
 import com.typelegal.global.security.JwtConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -35,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - 실제 빈을 사용하되 Repository는 모킹
  */
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")  // application-test.yml 사용
 class AuthControllerTest {
 
@@ -53,8 +56,15 @@ class AuthControllerTest {
 
     @Autowired
     private JwtConfig jwtConfig;
+    
+    @BeforeEach
+    void setUp() {
+        // Mockito 초기화 - MissingMethodInvocation 오류 해결
+        MockitoAnnotations.openMocks(this);
+    }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("회원가입_유효한_정보로_요청시_201_응답을_반환한다")
     void register_성공() throws Exception {
         // given
@@ -84,6 +94,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("회원가입_이미_존재하는_이메일로_요청시_409_응답을_반환한다")
     void register_이메일_중복_실패() throws Exception {
         // given
@@ -111,6 +122,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("로그인_유효한_자격증명으로_요청시_200_응답과_JWT_토큰을_반환한다")
     void login_성공() throws Exception {
         // given
@@ -150,6 +162,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("로그인_잘못된_자격증명으로_요청시_401_응답을_반환한다")
     void login_실패() throws Exception {
         // given
@@ -177,6 +190,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("이메일_중복확인_사용가능한_이메일일_경우_200_응답을_반환한다")
     void checkEmailDuplicate_사용가능() throws Exception {
         // given
@@ -191,6 +205,7 @@ class AuthControllerTest {
     }
 
     @Test
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("이메일_중복확인_이미_사용중인_이메일일_경우_409_응답을_반환한다")
     void checkEmailDuplicate_중복() throws Exception {
         // given

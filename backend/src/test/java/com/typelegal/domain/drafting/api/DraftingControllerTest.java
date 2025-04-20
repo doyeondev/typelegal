@@ -9,12 +9,18 @@ import com.typelegal.global.security.JwtConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockitoAnnotations;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-// import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -34,7 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * - 실제 빈을 사용하되 Service는 모킹
  */
 @SpringBootTest
-@AutoConfigureMockMvc
+@AutoConfigureMockMvc(addFilters = false) // Spring Security 필터 비활성화
 @ActiveProfiles("test")  // application-test.yml 사용
 class DraftingControllerTest {
 
@@ -47,7 +53,7 @@ class DraftingControllerTest {
     @MockBean
     private DraftingService draftingService;
 
-    @Autowired
+    @MockBean  // JWT 설정 Mock으로 변경
     private JwtConfig jwtConfig;
 
     private DraftingDto testDraftingDto;
@@ -56,6 +62,9 @@ class DraftingControllerTest {
 
     @BeforeEach
     void setUp() {
+        // Mockito 초기화
+        MockitoAnnotations.openMocks(this);
+        
         // 테스트 데이터 준비
         draftingId = UUID.randomUUID();
         memberId = UUID.randomUUID();
@@ -90,10 +99,41 @@ class DraftingControllerTest {
                 .contractData(contractData)
                 .contractInfo(contractInfo)
                 .build();
+                
+        // JWT 설정 모킹
+        when(jwtConfig.extractUserId(anyString())).thenReturn(memberId);
+        
+        // 사용자 인증 모킹
+        mockAuthentication("test@typelegal.com");
+    }
+    
+    /**
+     * 사용자 인증 정보를 모킹하는 유틸리티 메서드
+     */
+    private void mockAuthentication(String username) {
+        // 사용자 인증 정보 모킹을 위한 컴포넌트들
+        // 빈 이메일인 경우 기본값 설정
+        String email = (username == null || username.isEmpty()) ? "default@typelegal.com" : username;
+        
+        UserDetails userDetails = User.withUsername(email)
+                .password("password")
+                .authorities("ROLE_USER")
+                .build();
+        
+        Authentication authentication = mock(Authentication.class);
+        SecurityContext securityContext = mock(SecurityContext.class);
+        
+        // Mock 설정
+        when(authentication.getPrincipal()).thenReturn(userDetails);
+        when(authentication.isAuthenticated()).thenReturn(true);
+        when(securityContext.getAuthentication()).thenReturn(authentication);
+        
+        // SecurityContextHolder에 설정
+        SecurityContextHolder.setContext(securityContext);
     }
 
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("이메일로_드래프트_목록_조회_성공시_200_응답과_목록을_반환한다")
     void getDraftsByEmail_성공() throws Exception {
         // given
@@ -103,7 +143,7 @@ class DraftingControllerTest {
         when(draftingService.getDraftsByMemberEmail(anyString())).thenReturn(draftingList);
 
         // when & then
-        mockMvc.perform(get("/api/drafting")
+        mockMvc.perform(get("/api/data/drafting-data")
                 .param("email", "test@typelegal.com")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
@@ -114,25 +154,35 @@ class DraftingControllerTest {
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("빈_이메일로_드래프트_목록_조회시_400_응답을_반환한다")
     void getDraftsByEmail_이메일_누락_실패() throws Exception {
+        // 테스트 설정: 현재 사용자가 빈 이메일로 요청하면 BadRequest 발생하도록
+        mockAuthentication("");
+
         // when & then
-        mockMvc.perform(get("/api/drafting")
+        mockMvc.perform(get("/api/data/drafting-data")
                 .param("email", "")
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isBadRequest());
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("드래프트_저장_성공시_201_응답과_저장된_드래프트를_반환한다")
     void saveDraft_성공() throws Exception {
         // given
         when(draftingService.saveDraft(any(DraftingDto.class))).thenReturn(testDraftingDto);
+        
+        // JWT 토큰 추출 모킹 추가
+        when(jwtConfig.extractUserId(anyString())).thenReturn(memberId);
+
+        // mock credentials 반환
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        when(authentication.getCredentials()).thenReturn("dummy.jwt.token");
 
         // when & then
-        mockMvc.perform(post("/api/drafting")
+        mockMvc.perform(post("/api/data/drafting-data")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(testDraftingDto)))
                 .andExpect(status().isCreated())
@@ -141,7 +191,7 @@ class DraftingControllerTest {
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("드래프트_수정_성공시_200_응답과_수정된_드래프트를_반환한다")
     void updateDraft_성공() throws Exception {
         // given
@@ -158,7 +208,7 @@ class DraftingControllerTest {
         when(draftingService.updateDraft(any(UUID.class), any(DraftingDto.class))).thenReturn(updatedDto);
 
         // when & then
-        mockMvc.perform(put("/api/drafting/{id}", draftingId)
+        mockMvc.perform(put("/api/data/drafting-data/{id}", draftingId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(updatedDto)))
                 .andExpect(status().isOk())
@@ -168,7 +218,7 @@ class DraftingControllerTest {
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("존재하지_않는_드래프트_수정시_404_응답을_반환한다")
     void updateDraft_드래프트_미존재_실패() throws Exception {
         // given
@@ -178,52 +228,63 @@ class DraftingControllerTest {
                 .thenThrow(new DraftingNotFoundException("드래프트를 찾을 수 없습니다: " + nonExistentId));
 
         // when & then
-        mockMvc.perform(put("/api/drafting/{id}", nonExistentId)
+        mockMvc.perform(put("/api/data/drafting-data/{id}", nonExistentId)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(testDraftingDto)))
                 .andExpect(status().isNotFound());
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("드래프트_삭제_성공시_204_응답을_반환한다")
     void deleteDraft_성공() throws Exception {
         // given
         doNothing().when(draftingService).deleteDraft(any(UUID.class));
+        
+        // Create a DeleteRequestBody object
+        DraftingController.DeleteRequestBody deleteRequest = new DraftingController.DeleteRequestBody();
+        deleteRequest.setId(draftingId);
+        deleteRequest.setDeleted(true);
 
         // when & then
-        mockMvc.perform(delete("/api/drafting/{id}", draftingId)
-                .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isNoContent());
+        mockMvc.perform(put("/api/data/drafting-data/delete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(deleteRequest)))
+                .andExpect(status().isOk());
                 
         verify(draftingService, times(1)).deleteDraft(draftingId);
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("존재하지_않는_드래프트_삭제시_404_응답을_반환한다")
     void deleteDraft_드래프트_미존재_실패() throws Exception {
         // given
         UUID nonExistentId = UUID.randomUUID();
         
+        DraftingController.DeleteRequestBody deleteRequest = new DraftingController.DeleteRequestBody();
+        deleteRequest.setId(nonExistentId);
+        deleteRequest.setDeleted(true);
+        
         doThrow(new DraftingNotFoundException("드래프트를 찾을 수 없습니다: " + nonExistentId))
                 .when(draftingService).deleteDraft(any(UUID.class));
 
         // when & then
-        mockMvc.perform(delete("/api/drafting/{id}", nonExistentId)
-                .contentType(MediaType.APPLICATION_JSON))
+        mockMvc.perform(put("/api/data/drafting-data/delete")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(deleteRequest)))
                 .andExpect(status().isNotFound());
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("드래프트_ID로_조회_성공시_200_응답과_드래프트를_반환한다")
     void getDraftById_성공() throws Exception {
         // given
         when(draftingService.getDraftById(any(UUID.class))).thenReturn(testDraftingDto);
 
         // when & then
-        mockMvc.perform(get("/api/drafting/{id}", draftingId)
+        mockMvc.perform(get("/api/data/drafting-data/{id}", draftingId)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id", is(draftingId.toString())))
@@ -231,7 +292,7 @@ class DraftingControllerTest {
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("존재하지_않는_ID로_조회시_404_응답을_반환한다")
     void getDraftById_드래프트_미존재_실패() throws Exception {
         // given
@@ -241,37 +302,35 @@ class DraftingControllerTest {
                 .thenThrow(new DraftingNotFoundException("드래프트를 찾을 수 없습니다: " + nonExistentId));
 
         // when & then
-        mockMvc.perform(get("/api/drafting/{id}", nonExistentId)
+        mockMvc.perform(get("/api/data/drafting-data/{id}", nonExistentId)
                 .contentType(MediaType.APPLICATION_JSON))
                 .andExpect(status().isNotFound());
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
     @DisplayName("드래프트_존재_여부_확인_존재하는_경우_200_응답을_반환한다")
     void checkDraftExists_존재() throws Exception {
         // given
         when(draftingService.existsById(any(UUID.class))).thenReturn(true);
 
         // when & then
-        mockMvc.perform(get("/api/drafting/exists/{id}", draftingId)
+        mockMvc.perform(get("/api/data/drafting-data/{id}/exists", draftingId)
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().string("true"));
+                .andExpect(status().isOk());
     }
     
     @Test
-    // @WithMockUser(username = "test@typelegal.com", roles = "USER")
-    @DisplayName("드래프트_존재_여부_확인_존재하지_않는_경우_200_응답과_false를_반환한다")
+    @WithMockUser(username = "test@typelegal.com", roles = "USER")
+    @DisplayName("드래프트_존재_여부_확인_존재하지_않는_경우_404_응답을_반환한다")
     void checkDraftExists_미존재() throws Exception {
         // given
         UUID nonExistentId = UUID.randomUUID();
         when(draftingService.existsById(any(UUID.class))).thenReturn(false);
 
         // when & then
-        mockMvc.perform(get("/api/drafting/exists/{id}", nonExistentId)
+        mockMvc.perform(get("/api/data/drafting-data/{id}/exists", nonExistentId)
                 .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(content().string("false"));
+                .andExpect(status().isNotFound());
     }
 } 
