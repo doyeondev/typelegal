@@ -19,6 +19,7 @@ const nextConfig = {
 	compiler: {
 		// SWC 컴파일러를 사용
 		styledComponents: true,
+		removeConsole: true, // production 에서 console 제거
 	},
 };
 

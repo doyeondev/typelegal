@@ -1,12 +1,8 @@
 com/typelegal/domain/drafting/application/DraftingServiceTest.class
 com/typelegal/domain/question/api/QuestionControllerTest.class
-com/typelegal/domain/clause/application/ClauseServiceTest.class
 com/typelegal/global/security/JwtAuthenticationFilterTest.class
-com/typelegal/domain/member/api/AuthControllerTest.class
 com/typelegal/domain/template/api/TemplateProcessingControllerTest.class
 com/typelegal/domain/drafting/api/DraftingControllerTest.class
-com/typelegal/global/security/SecurityConfigTest.class
-com/typelegal/domain/question/application/QuestionServiceTest.class
 com/typelegal/domain/clause/api/ClauseControllerTest.class
 com/typelegal/global/security/JwtConfigTest.class
 com/typelegal/domain/member/application/MemberServiceTest.class
