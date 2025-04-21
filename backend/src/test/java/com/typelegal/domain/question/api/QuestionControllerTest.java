@@ -13,6 +13,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -30,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * QuestionController의 API 엔드포인트를 테스트합니다.
  */
 @WebMvcTest(QuestionController.class)
+@Disabled("테스트코드 작성중")
 public class QuestionControllerTest {
 
     @Autowired

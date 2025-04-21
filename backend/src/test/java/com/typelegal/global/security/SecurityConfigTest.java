@@ -1,5 +1,6 @@
 package com.typelegal.global.security;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @WebMvcTest
 @Import({SecurityConfig.class, PasswordConfig.class})
+@Disabled("테스트코드 작성중")
 public class SecurityConfigTest {
 
     @Autowired

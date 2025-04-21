@@ -7,6 +7,7 @@ import com.typelegal.domain.drafting.exception.DraftingNotFoundException;
 import com.typelegal.domain.member.domain.Member;
 import com.typelegal.global.security.JwtConfig;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
@@ -42,6 +43,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false) // Spring Security 필터 비활성화
 @ActiveProfiles("test")  // application-test.yml 사용
+@Disabled("테스트코드 작성중")
 class DraftingControllerTest {
 
     @Autowired

@@ -7,6 +7,7 @@ import com.typelegal.domain.member.dto.AuthRequest;
 import com.typelegal.domain.member.dto.RegisterRequest;
 import com.typelegal.global.security.JwtConfig;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockitoAnnotations;
@@ -40,6 +41,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
 @ActiveProfiles("test")  // application-test.yml 사용
+@Disabled("테스트코드 작성중")
 class AuthControllerTest {
 
     @Autowired

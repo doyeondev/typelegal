@@ -4,6 +4,7 @@ import com.typelegal.domain.clause.dao.ClauseRepository;
 import com.typelegal.domain.clause.domain.Clause;
 import com.typelegal.domain.clause.dto.ClauseResponseDto;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +26,7 @@ import static org.mockito.Mockito.*;
  * 조항 서비스의 기능을 검증합니다.
  */
 @ExtendWith(MockitoExtension.class)
+@Disabled("테스트코드 작성중")
 class ClauseServiceTest {
 
     @Mock

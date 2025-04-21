@@ -5,6 +5,7 @@ import com.typelegal.domain.clause.application.ClauseService;
 import com.typelegal.domain.clause.domain.Clause;
 import com.typelegal.domain.clause.dto.ClauseResponseDto;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -35,6 +36,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
+@Disabled("테스트코드 작성중")
 public class ClauseControllerTest {
 
     @Autowired

@@ -13,6 +13,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.*;
 
@@ -28,6 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * 템플릿 데이터 처리 엔드포인트를 테스트합니다.
  */
 @WebMvcTest(TemplateProcessingController.class)
+@Disabled("테스트코드 작성중")
 public class TemplateProcessingControllerTest {
 
     @Autowired

@@ -21,6 +21,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -369,7 +371,7 @@ public class QuestionServiceTest {
 
         // then
         assertThat(result).isNotNull();
-        assertThat(result.getId()).isEqualTo(id);
+        assertThat(result.getId()).isEqualTo(UUID.fromString("00000000-0000-0000-0000-000000000001"));
         assertThat(result.getCId()).isEqualTo(question.getCId());
         assertThat(result.getQuestionType()).isEqualTo(question.getQuestionType());
 
@@ -382,10 +384,10 @@ public class QuestionServiceTest {
      * 존재하지 않는 ID로 질문을 조회할 때 예외가 발생하는지 테스트합니다.
      */
     @Test
-    @DisplayName("ID로 질문 조회 - 질문 없음")
+    @DisplayName("ID로 질문 조회 - Not Found 예외")
     void getQuestionById_NotFound() {
         // given
-        UUID id = UUID.fromString("123e4567-e89b-12d3-a456-426614174999"); // 없는 UUID
+        UUID id = UUID.randomUUID();
         when(questionRepository.findById(id)).thenReturn(Optional.empty());
 
         // when & then

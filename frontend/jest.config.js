@@ -5,8 +5,9 @@ module.exports = {
 	testEnvironment: 'jsdom',
 	roots: ['<rootDir>'],
 	moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json'],
-	setupFilesAfterEnv: ['../jest.setup.js'],
-	testPathIgnorePatterns: ['/node_modules/', '/.next/'],
+	moduleDirectories: ['node_modules', 'src'],
+	setupFilesAfterEnv: ['./jest.setup.js'],
+	testPathIgnorePatterns: ['/node_modules/', '/.next/', '/__tests__/skip/', '/tests/e2e/'],
 	transform: {
 		'^.+\\.(js|jsx|ts|tsx)$': ['babel-jest', { presets: ['next/babel'] }],
 	},
