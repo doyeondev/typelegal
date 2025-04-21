@@ -7,10 +7,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringBootTest
+@Disabled("환경 설정 문제로 인해 테스트 비활성화 (.env 파일 의존성)")
 class TypeLegalApplicationTests {
 
     @Test
-    @Disabled("환경 설정 문제로 인해 테스트 비활성화 (.env 파일 의존성)")
     void contextLoads() {
         assertTrue(true);
     }
