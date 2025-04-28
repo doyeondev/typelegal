@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Layout from '@components/layout';
 import Head from 'next/head';
 import { terms_array } from '../../utils/data';
+import PublicRoute from '../../src/components/auth/PublicRoute';
 
 import _ from 'lodash';
 // import Link from 'next/link'
@@ -9,7 +10,15 @@ import _ from 'lodash';
 // import styles from "../styles/Home.module.scss";
 // let currentIndex = 0
 
-export default function Terms() {
+export default function TermsWrapper() {
+	return (
+		<PublicRoute restricted={false}>
+			<Terms />
+		</PublicRoute>
+	);
+}
+
+function Terms() {
 	// const [policyData, setPolicyData] = useState([])
 	const [loaded, isLoaded] = useState(false);
 	const [currentMember, setCurrentMember] = useState('');

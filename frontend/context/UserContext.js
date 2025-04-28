@@ -1,6 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import { checkAuthStatus } from '../pages/api/services/httpClient';
-import memberApi from '../pages/api/services/memberApi';
+import userService from '../src/services/userService';
 
 // 사용자 컨텍스트 생성
 const UserContext = createContext(null);
@@ -34,10 +33,16 @@ export function UserProvider({ initialUserData, children }) {
 		const checkLoginStatus = async () => {
 			try {
 				// 서버에 실제 인증 상태 확인
-				const isAuthenticated = await checkAuthStatus();
+				let isAuthenticated = false;
+				try {
+					const userData = await userService.getCurrentUser();
+					isAuthenticated = !!userData && !!userData.email;
+				} catch (error) {
+					isAuthenticated = false;
+				}
 
 				// 로컬 로그인 상태와 서버 인증 상태가 불일치하는 경우
-				const localLoginState = localStorage.getItem('is_logged_in') === 'true';
+				const localLoginState = userService.isLoggedIn();
 
 				// 서버 인증은 되어 있는데 로컬 상태가 없는 경우 - 상태 복구
 				if (isAuthenticated && !localLoginState) {
@@ -82,27 +87,25 @@ export function UserProvider({ initialUserData, children }) {
 	const loadUserFromServer = async () => {
 		setIsLoading(true);
 		try {
-			// 서버에 실제 인증 상태 확인
-			const isAuthenticated = await checkAuthStatus();
+			// 서버에서 현재 사용자 정보 가져오기
+			let userData = null;
+			try {
+				userData = await userService.getCurrentUser();
+				// 이미 userService에서 response.data.user를 반환함
+			} catch (error) {
+				console.error('사용자 정보 API 호출 오류:', error);
+				userData = null;
+			}
 
-			if (isAuthenticated) {
-				// 서버에서 현재 사용자 정보 가져오기
-				const userData = await memberApi.getCurrentUser();
+			if (userData && userData.email) {
+				console.log('서버에서 사용자 정보 로드됨:', userData.email);
+				setUser(userData);
 
-				if (userData && userData.email) {
-					console.log('서버에서 사용자 정보 로드됨:', userData.email);
-					setUser(userData);
-
-					// 로컬 상태 업데이트
-					localStorage.setItem('is_logged_in', 'true');
-					sessionStorage.setItem('member_key', JSON.stringify(userData));
-				} else {
-					console.log('서버에서 유효한 사용자 정보가 반환되지 않음');
-					setUser(null);
-					clearAuthState();
-				}
+				// 로컬 상태 업데이트
+				localStorage.setItem('is_logged_in', 'true');
+				sessionStorage.setItem('member_key', JSON.stringify(userData));
 			} else {
-				console.log('서버 인증 상태 확인: 로그인되지 않음');
+				console.log('서버에서 유효한 사용자 정보가 반환되지 않음');
 				setUser(null);
 				clearAuthState();
 			}
@@ -194,7 +197,7 @@ export function UserProvider({ initialUserData, children }) {
 
 		try {
 			// 서버에 로그아웃 요청 (API에 구현되어 있다면)
-			await memberApi.logout();
+			await userService.logout();
 		} catch (error) {
 			console.error('서버 로그아웃 처리 오류:', error);
 		}

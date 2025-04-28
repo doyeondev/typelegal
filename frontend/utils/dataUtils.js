@@ -1,6 +1,6 @@
 import _ from 'lodash';
-import { getMemberIdFromStorage } from '../pages/api/services/httpClient';
-import { post } from '../pages/api/services/httpClient';
+import apiClient from '../src/libs/apiClient';
+import userService from '../src/services/userService';
 
 export async function fetchProcessedData(query1, query2) {
 	try {
@@ -80,7 +80,7 @@ export async function saveContractData(data) {
 			id: data.id,
 			contractTitle: data.title,
 			contractData: JSON.stringify(data.contractData),
-			memberId: getMemberIdFromStorage(), // 세션스토리지에서 회원 ID 가져오기
+			memberId: userService.getUserFromStorage()?.id, // 세션스토리지에서 회원 ID 가져오기
 			status: data.status || 'stage1',
 			query: data.query,
 			contractInfo: JSON.stringify(data.templateInfo),
@@ -101,7 +101,7 @@ export async function saveContractData(data) {
 
 		console.log(`[saveContractData] 요청 URL: ${apiUrlEndpoint}, 메서드: ${method}`);
 
-		const response = await (method === 'POST' ? post(apiUrlEndpoint, draftingDto) : post(apiUrlEndpoint, draftingDto));
+		const response = await (method === 'POST' ? apiClient.post(apiUrlEndpoint, draftingDto) : apiClient.put(apiUrlEndpoint, draftingDto));
 
 		console.log(`[saveContractData] 응답:`, response);
 		return response;

@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
-import memberApi from './api/services/memberApi'; // 경로 수정
+import userService from '../src/services/userService';
 import { useRouter } from 'next/router';
 import { useUser } from '../context/UserContext';
-import { checkAuthStatus } from './api/services/httpClient';
+import PublicRoute from '../src/components/auth/PublicRoute';
 // import LoginItem from '../components/login-item'
 
-export default function Login() {
+// 로그인 페이지 컴포넌트
+function LoginPage() {
 	const [loginError, setLoginError] = useState(false);
 	const [disabled, setDisabled] = useState(false);
 	const [errorMessage, setErrorMessage] = useState('');
@@ -16,25 +17,23 @@ export default function Login() {
 	const { login } = useUser(); // 전역 사용자 컨텍스트 훅 사용
 
 	useEffect(() => {
-		async function checkLoginStatus() {
-			// 페이지 로드 시 서버에 인증 상태 확인
-			const isAuthenticated = await checkAuthStatus();
-			console.log('인증 상태 확인:', isAuthenticated);
-
-			// 이미 인증된 경우 대시보드로 리디렉션
-			if (isAuthenticated) {
-				// 리디렉션 경로 확인
-				const redirectPath = router.query.redirect || '/dashboard';
-				console.log('이미 로그인 상태입니다. 리디렉션:', redirectPath);
-				router.push(redirectPath);
-			}
-
-			// 테마 설정
+		// 테마 설정
+		if (typeof window !== 'undefined') {
 			localStorage.theme = 'light';
 		}
 
-		checkLoginStatus();
-	}, [router]);
+		// URL 파라미터 확인
+		const { tokenExpired, unauthorized } = router.query;
+
+		// 토큰 만료 또는 인증 오류 메시지 표시
+		if (tokenExpired) {
+			setLoginError(true);
+			setErrorMessage('세션이 만료되었습니다. 다시 로그인해주세요.');
+		} else if (unauthorized) {
+			setLoginError(true);
+			setErrorMessage('로그인이 필요한 페이지입니다.');
+		}
+	}, [router.query]);
 
 	const [input, setInput] = useState({
 		userEmail: '',
@@ -90,22 +89,15 @@ export default function Login() {
 			console.log('로그인 시도 중...');
 			console.log('입력된 이메일:', email);
 
-			// API 클라이언트를 사용하여 로그인 (필드명 변환)
-			const response = await memberApi.login({
-				email: email, // userEmail에서 email로 필드명 변환
+			// API 클라이언트를 사용하여 로그인
+			const userData = await userService.login({
+				email: email,
 				password: password,
 			});
-			console.log('로그인 성공:', response);
-
-			// 로그인 상태 플래그 저장 (쿠키는 서버에서 자동으로 설정됨)
-			localStorage.setItem('is_logged_in', 'true');
-			console.log('로그인 상태 저장 완료');
-
-			// 서버에 현재 인증 상태 확인
-			const userData = await fetchCurrentUser();
+			console.log('로그인 성공:', userData);
 
 			if (!userData) {
-				throw new Error('사용자 정보를 가져오는데 실패했습니다.');
+				throw new Error('로그인은 성공했으나 사용자 정보를 받지 못했습니다.');
 			}
 
 			// UserContext를 통해 전역 상태 업데이트
@@ -120,6 +112,8 @@ export default function Login() {
 			// 에러 메시지 설정
 			if (error.status === 401) {
 				setErrorMessage('이메일 또는 비밀번호가 올바르지 않습니다.');
+			} else if (error.status === 429) {
+				setErrorMessage('로그인 시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.');
 			} else if (error.message) {
 				setErrorMessage(error.message);
 			} else {
@@ -131,51 +125,40 @@ export default function Login() {
 	}
 
 	/**
-	 * 현재 로그인한 사용자 정보를 가져옵니다.
-	 * @returns {Promise<Object>} 사용자 정보
-	 */
-	async function fetchCurrentUser() {
-		try {
-			console.log('현재 사용자 정보 조회 중...');
-			const userData = await memberApi.getCurrentUser();
-
-			if (!userData || !userData.email) {
-				console.error('사용자 정보 누락');
-				return null;
-			}
-
-			console.log('사용자 정보 조회 성공:', userData);
-
-			// 세션 스토리지에 사용자 정보 캐싱
-			sessionStorage.setItem('member_key', JSON.stringify(userData));
-
-			return userData;
-		} catch (error) {
-			console.error('사용자 정보 조회 실패:', error);
-			return null;
-		}
-	}
-
-	/**
 	 * 로그인 후 리디렉션 처리
 	 */
 	function handleRedirectAfterLogin() {
-		// URL 쿼리 파라미터에서 리디렉션 경로 확인
-		const redirectParam = router.query.redirect;
+		try {
+			// URL 쿼리 파라미터에서 리디렉션 경로 확인
+			const redirectParam = router.query.redirect;
 
-		// 이전에 시도했던 페이지 또는 URL 쿼리에서 지정된 경로로 이동
-		// 우선순위: 1. 쿼리 파라미터의 redirect 2. 세션에 저장된 경로 3. 대시보드
-		const redirectPath = redirectParam || sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
+			// 이전에 시도했던 페이지 또는 URL 쿼리에서 지정된 경로로 이동
+			// 우선순위: 1. 쿼리 파라미터의 redirect 2. 세션에 저장된 경로 3. 대시보드
+			let redirectPath = redirectParam || sessionStorage.getItem('redirectAfterLogin') || '/dashboard';
 
-		if (redirectParam) {
-			console.log('쿼리 파라미터에서 리디렉션 경로 사용:', redirectParam);
-		} else if (sessionStorage.getItem('redirectAfterLogin')) {
-			console.log('세션 스토리지에서 리디렉션 경로 사용:', sessionStorage.getItem('redirectAfterLogin'));
+			// 유효한 경로인지 확인 (상대 경로여야 함)
+			if (redirectPath.startsWith('http') || redirectPath.startsWith('//')) {
+				console.warn('외부 URL로 리디렉션 시도 감지. 대시보드로 리디렉션합니다.');
+				redirectPath = '/dashboard';
+			}
+
+			// 리디렉션 경로 로깅
+			if (redirectParam) {
+				console.log('쿼리 파라미터에서 리디렉션 경로 사용:', redirectParam);
+			} else if (sessionStorage.getItem('redirectAfterLogin')) {
+				console.log('세션 스토리지에서 리디렉션 경로 사용:', sessionStorage.getItem('redirectAfterLogin'));
+			}
+
+			console.log('로그인 후 리디렉션:', redirectPath);
+			sessionStorage.removeItem('redirectAfterLogin'); // 사용 후 삭제
+
+			// 리디렉션 수행
+			router.push(redirectPath);
+		} catch (error) {
+			console.error('리디렉션 처리 중 오류 발생:', error);
+			// 오류 발생 시 기본적으로 대시보드로 이동
+			router.push('/dashboard');
 		}
-
-		console.log('로그인 후 리디렉션:', redirectPath);
-		sessionStorage.removeItem('redirectAfterLogin'); // 사용 후 삭제
-		router.push(redirectPath);
 	}
 
 	return (
@@ -279,5 +262,14 @@ export default function Login() {
 				</div>
 			</div>
 		</section>
+	);
+}
+
+// PublicRoute로 감싸서 이미 로그인한 사용자는 접근할 수 없도록 함
+export default function Login() {
+	return (
+		<PublicRoute restricted={true} redirectTo="/dashboard">
+			<LoginPage />
+		</PublicRoute>
 	);
 }

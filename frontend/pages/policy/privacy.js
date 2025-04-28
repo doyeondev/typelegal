@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Layout from '@components/Layout';
 import Head from 'next/head';
 import { privacy_array } from '../../utils/data';
+import PublicRoute from '../../src/components/auth/PublicRoute';
 
 import _ from 'lodash';
 // import Link from 'next/link'
@@ -9,7 +10,8 @@ import _ from 'lodash';
 // import styles from "../styles/Home.module.scss";
 // let currentIndex = 0
 
-export default function Terms() {
+// Policy 내용을 표시하는 컴포넌트
+function Privacy() {
 	// const [policyData, setPolicyData] = useState([])
 	const [loaded, isLoaded] = useState(false);
 	const [currentMember, setCurrentMember] = useState('');
@@ -86,6 +88,15 @@ export default function Terms() {
 				</div>
 			</Layout>
 		</>
+	);
+}
+
+// PublicRoute로 감싸서 모든 사용자가 접근할 수 있도록 수정
+export default function PrivacyWrapper() {
+	return (
+		<PublicRoute restricted={false}>
+			<Privacy />
+		</PublicRoute>
 	);
 }
 

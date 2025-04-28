@@ -2,6 +2,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from 'react-query';
 import { useUser } from '../../context/UserContext';
+import PrivateRoute from '../../src/components/auth/PrivateRoute';
 
 import React, { useEffect, useState, useCallback } from 'react';
 
@@ -34,7 +35,7 @@ import { setProp, deepClone } from '/utils/objectUtils.js';
 import { useLeavePageConfirmation } from '/pages/hooks/useLeavePageConfirmation';
 import { post_draftLog } from '/pages/api/logs/docDraft';
 import { post_activityLog } from '/pages/api/logs/docActivity';
-import draftingApi from '/pages/api/services/draftingApi';
+import draftService from '/src/services/draftService';
 
 // Zustand store
 import { useDraftStore } from '@/store/useDraftStore';
@@ -53,21 +54,8 @@ const fetchTemplateInfo = async type => {
 	return data.items;
 };
 
-// 가공 데이터 fetch 함수
-const fetchProcessedDataApi = async (query1, query2, token) => {
-	const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/getProcessedData?query1=${query1}&query2=${query2}`;
-
-	const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-	const response = await fetch(apiUrl, { headers });
-	if (!response.ok) {
-		throw new Error(`데이터 요청 실패: ${response.status} ${response.statusText}`);
-	}
-
-	return response.json();
-};
-
-export default function Draft({ contract, contractData, user }) {
+// 기존의 Draft 컴포넌트
+function Draft({ contract, contractData, user }) {
 	console.log('contract', contract);
 	console.log('contractData', contractData);
 	console.log('서버에서 받은 사용자 정보:', user);
@@ -138,7 +126,7 @@ export default function Draft({ contract, contractData, user }) {
 	});
 
 	// 계약서 데이터 쿼리 (이미 서버에서 가져온 경우 사용)
-	const { data: processedData } = useQuery(['processedData', contract.type], () => fetchProcessedDataApi('10', contract.type, localStorage.getItem('auth_token')), {
+	const { data: processedData } = useQuery(['processedData', contract.type], () => fetchProcessedData('10', contract.type), {
 		initialData: contractData,
 		staleTime: 1000 * 60 * 5,
 		enabled: !!contract.type,
@@ -192,7 +180,7 @@ export default function Draft({ contract, contractData, user }) {
 				if (item_value) {
 					// 기존 문서 로드
 					try {
-						const fetchedData = await draftingApi.getDraft(item_value);
+						const fetchedData = await draftService.getDraft(item_value);
 						contract_id = fetchedData.id;
 						const data = fetchedData.contractData;
 
@@ -419,7 +407,7 @@ export default function Draft({ contract, contractData, user }) {
 			resetAuthToken();
 
 			// 데이터 저장 요청
-			draftingApi
+			draftService
 				.saveDraft(toSave)
 				.then(response => {
 					setSaveToastState(true);
@@ -985,6 +973,15 @@ export default function Draft({ contract, contractData, user }) {
 				<DraftFooter />
 			</div>
 		</>
+	);
+}
+
+// PrivateRoute로 감싸서 인증된 사용자만 접근할 수 있도록 수정
+export default function DraftWrapper({ contract, contractData, user }) {
+	return (
+		<PrivateRoute>
+			<Draft contract={contract} contractData={contractData} user={user} />
+		</PrivateRoute>
 	);
 }
 

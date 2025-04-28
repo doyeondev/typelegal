@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { EMAIL_REGEX_VALIDATION, PASSWORD_REGEX_VALIDATION, PHONE_REGEX_VALIDATION } from '../lib/lib';
 // import React from 'react'
 import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
-import memberApi from './api/services/memberApi'; // 경로 수정
+import userService from '../src/services/userService';
 import { useRouter } from 'next/router';
+import { Form, Input, Button, Typography, message, Spin, Checkbox } from 'antd';
+import PublicRoute from '../src/components/auth/PublicRoute';
 
 // registered : true
 // submittedSurvey : true 반영하기
@@ -123,7 +125,7 @@ export default function SignUp() {
 			console.log('이메일 중복 체크 중...');
 
 			// 전용 이메일 중복 확인 API 사용
-			await memberApi.checkEmailDuplicate(email);
+			await userService.checkEmailDuplicate(email);
 
 			// 중복 체크 통과
 			setIsEmailChecked(true);
@@ -166,7 +168,7 @@ export default function SignUp() {
 			console.log('회원가입 처리 중...');
 
 			// 회원가입 요청
-			const response = await memberApi.register({
+			const response = await userService.register({
 				name,
 				email,
 				password,
@@ -361,3 +363,12 @@ export default function SignUp() {
 		</section>
 	);
 }
+
+// 최종 컴포넌트는 PublicRoute로 감싸서 내보냅니다
+const WrappedSignUpPage = () => (
+	<PublicRoute restricted={true} redirectTo="/dashboard">
+		<SignUp />
+	</PublicRoute>
+);
+
+export { WrappedSignUpPage as default };

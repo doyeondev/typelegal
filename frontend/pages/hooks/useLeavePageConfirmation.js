@@ -1,7 +1,7 @@
 import SingletonRouter, { Router } from 'next/router';
 import { useEffect } from 'react';
 import { timeDiffSec, timeDiffMin, timestamp } from '../../utils/timeUtils';
-import { post_activityLog } from '../../pages/api/logs/docActivity';
+import { post_activityLog } from '/pages/api/logs/docActivity';
 
 const defaultConfirmationDialog = async msg => window.confirm(msg);
 

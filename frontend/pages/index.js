@@ -5,10 +5,11 @@ import Layout from '../components/Layout';
 import { useEffect, useState } from 'react';
 import LoginModal from '../components/modals/LoginModal';
 import Link from 'next/link';
+import PublicRoute from '../src/components/auth/PublicRoute';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export default function Home() {
+function Home() {
 	const [loginModalOpen, setLoginModalOpen] = useState(false);
 
 	useEffect(() => {
@@ -107,5 +108,13 @@ export default function Home() {
 				{/* </div> */}
 			</main>
 		</Layout>
+	);
+}
+
+export default function HomePage() {
+	return (
+		<PublicRoute restricted={false}>
+			<Home />
+		</PublicRoute>
 	);
 }

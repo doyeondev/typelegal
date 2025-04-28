@@ -2,9 +2,11 @@ import Link from 'next/link';
 import Head from 'next/head';
 import Layout from '/components/Layout';
 import Spinner from '/components/ui/Spinner';
+import React, { useEffect, useState } from 'react';
+import { useQuery } from 'react-query';
+import PrivateRoute from '../../src/components/auth/PrivateRoute';
 
 import useSWR from 'swr';
-import React, { useEffect } from 'react';
 
 // const fetcher = () => fetch('https://conan.ai/_functions/getAllTemplateInfo').then(response => response.json())
 
@@ -62,4 +64,10 @@ const ContractList = ({ data }) => {
 	);
 };
 
-export default Template;
+export default function TemplateWrapper() {
+	return (
+		<PrivateRoute>
+			<Template />
+		</PrivateRoute>
+	);
+}
