@@ -1,9 +1,9 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
+import { useQuery } from 'react-query';
+import { useUser } from '../../context/UserContext';
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
-import _ from 'lodash';
-import * as R from 'ramda';
+import React, { useEffect, useState, useCallback } from 'react';
 
 import Head from 'next/head';
 
@@ -20,37 +20,91 @@ import SidePanel from '/components/ui/SidePanel';
 import ToastSave from '/components/ui/ToastSave';
 
 // 유틸 함수 Import
-import { fetchProcessedData, saveContractData } from '/utils/dataUtils.js';
-import { findItemIndex, replaceArray, getKeyAndValue, findItem, getArrayOfKeys } from '/utils/arrayUtils.js';
+import { fetchProcessedData } from '/utils/dataUtils.js';
+import { findItemIndex, replaceArray, getKeyAndValue, findItem, getArrayOfKeys, orderBy, groupBy, uniqueArray, flatten } from '/utils/arrayUtils.js';
 import { returnCurrencyValue, returnInputValue } from '/utils/inputUtils.js';
 import { removeHighlight, replaceMulCharInString } from '/utils/textUtils.js';
 import { timeDiffSec, timeDiffMin, timestamp } from '/utils/timeUtils.js';
 import { handleScroll, handleScroll2 } from '/utils/uxUtils.js';
 import { exportContent } from '/utils/fileUtils.js';
 import { resetAuthToken } from '/utils/authUtils.js';
+import { setProp, deepClone } from '/utils/objectUtils.js';
 
 // hook, api Import
 import { useLeavePageConfirmation } from '/pages/hooks/useLeavePageConfirmation';
-import { post_saveLog } from '/pages/api/logs/docSave';
 import { post_draftLog } from '/pages/api/logs/docDraft';
 import { post_activityLog } from '/pages/api/logs/docActivity';
 import draftingApi from '/pages/api/services/draftingApi';
-import { getMemberIdFromStorage } from '/pages/api/services/httpClient';
+
+// Zustand store
+import { useDraftStore } from '@/store/useDraftStore';
 
 let clause_template, question_template;
 let tracerKey, tracer, cidx;
 let item_value;
 
-export default function Draft({ contract }) {
+// 서버사이드 API 함수 정의
+const fetchTemplateInfo = async type => {
+	const response = await fetch(`https://conan.ai/_functions/getTemplateInfo/${type}`);
+	if (!response.ok) {
+		throw new Error(`템플릿 정보 가져오기 실패: ${response.status}`);
+	}
+	const data = await response.json();
+	return data.items;
+};
+
+// 가공 데이터 fetch 함수
+const fetchProcessedDataApi = async (query1, query2, token) => {
+	const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/getProcessedData?query1=${query1}&query2=${query2}`;
+
+	const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+	const response = await fetch(apiUrl, { headers });
+	if (!response.ok) {
+		throw new Error(`데이터 요청 실패: ${response.status} ${response.statusText}`);
+	}
+
+	return response.json();
+};
+
+export default function Draft({ contract, contractData, user }) {
+	console.log('contract', contract);
+	console.log('contractData', contractData);
+	console.log('서버에서 받은 사용자 정보:', user);
+
+	// Zustand store 사용
+	const {
+		contractId,
+		setContractId,
+		docStatus,
+		setDocStatus,
+		questionData,
+		setQuestionData,
+		clauseData,
+		setClauseData,
+		inputData,
+		setInputData,
+		questionGroupData,
+		setQuestionGroupData,
+		answeredQuestionData,
+		setAnsweredQuestionData,
+		questionGroupKey,
+		setQuestionGroupKey,
+		activeClauseKeys,
+		setActiveClauseKeys,
+		glossary,
+		setGlossary,
+		activityLog,
+		setActivityLog,
+		updateActivityLog,
+		initializeContractData,
+	} = useDraftStore();
+
+	const { user: userContext } = useUser();
 	const searchParams = useSearchParams();
 
 	const [changesOnPage, setChangesOnPage] = useState(true);
 	const [newClause, setNewClause] = useState('');
-	const [contractId, setContractId] = useState('');
-	const [clauseData, setClauseData] = useState([]);
-	const [inputData, setInputData] = useState([]);
-	const [questionData, setQuestionData] = useState([]);
-	const [questionGroupData, setQuestionGroupData] = useState([]);
 
 	const [saveBtnState, setSaveBtnState] = useState(false);
 	const [saveToastState, setSaveToastState] = useState(false);
@@ -64,260 +118,214 @@ export default function Draft({ contract }) {
 	const [itemIndex, setItemIndex] = useState(0);
 	const [lastItemIndex, setLastItemIndex] = useState(0);
 	const [progress, setProgress] = useState(0);
-	const [questionGroupKey, setQuestionGroupKey] = useState([]);
 
-	const [answeredQuestionData, setAnsweredQuestionData] = useState([]);
-	// NEW
-	const [glossary, setGlossary] = useState([]);
-
-	// NEW
 	const [showSidebar, setShowSidebar] = useState(false);
-
-	// NEW
-	const [activeClauseKeys, setActiveClauseKeys] = useState([]);
-	const [currentMember, setCurrentMember] = useState('');
+	const [currentMember, setCurrentMember] = useState(user || '');
 
 	// Survey Modal
 	const [isOpen, setIsOpen] = useState(false);
 
 	const [userOS, setUserOS] = useState('');
 	const [questionPanel, setQuestionPanel] = useState(true);
-	const [docStatus, setDocStatus] = useState('');
-	const [activityLog, setActivityLog] = useState({ id: '', title: '', _userName: '', userEmail: '', startTime: timestamp(), endTime: '', docProgress: '', docStatus: '', docId: '', duration: 0, durationMin: 0 });
-	const [formSubmitted, setFormSubmitted] = useState('');
+	const [formSubmitted, setFormSubmitted] = useState(user?.submittedSurvey || '');
 
 	useLeavePageConfirmation(changesOnPage, activityLog);
+
+	// React Query 훅 사용 (SSR prefetch와 통합)
+	const { data: templateData } = useQuery(['templateInfo', contract.type], () => fetchTemplateInfo(contract.type), {
+		initialData: contract,
+		staleTime: 1000 * 60 * 5, // 5분 동안 fresh 상태 유지
+	});
+
+	// 계약서 데이터 쿼리 (이미 서버에서 가져온 경우 사용)
+	const { data: processedData } = useQuery(['processedData', contract.type], () => fetchProcessedDataApi('10', contract.type, localStorage.getItem('auth_token')), {
+		initialData: contractData,
+		staleTime: 1000 * 60 * 5,
+		enabled: !!contract.type,
+	});
+
+	// REFACTORING: 공통으로 사용되는 groupBy 로직을 함수로 추출
+	const groupQuestionsByCategory = questions => {
+		return groupBy(orderBy(questions, ['midx', 'qidx'], ['asc', 'asc']), q => q.binding_question_ko || '기본 정보');
+	};
 
 	useEffect(() => {
 		async function getPageData() {
 			try {
 				localStorage.theme = 'light';
+				setUserOS(window.navigator.userAgent.includes('Mac') ? 'Mac' : 'Window');
 
-				if (window.navigator.userAgent.includes('Mac')) {
-					setUserOS('Mac');
-				} else {
-					setUserOS('Window');
-				}
-				console.log('window.navigator.userAgent', window.navigator.userAgent);
-
-				// JWT 토큰 확인
-				const authToken = localStorage.getItem('auth_token');
-				console.log('인증 토큰 존재 여부:', !!authToken);
-
-				// 세션 스토리지 정보 확인
-				console.log('세션 스토리지 키:', Object.keys(sessionStorage));
-				console.log('member_key 존재 여부:', !!sessionStorage.getItem('member_key'));
-
-				// URL에서 id 파라미터 추출 (수정: _id로 변경)
-				item_value = searchParams.get('_id') || searchParams.get('id');
-				console.log('URL에서 추출한 ID 값:', item_value);
-
-				// 세션 스토리지에서 item_key 확인
-				const session_item_value = sessionStorage.getItem('item_key');
-				console.log('세션 스토리지에서 추출한 ID 값:', session_item_value);
-
-				// URL 파라미터가 없으면 세션 스토리지 값 사용
-				if (!item_value && session_item_value) {
-					item_value = session_item_value;
-					console.log('세션 스토리지 값으로 ID 설정:', item_value);
-				}
-
-				let contract_id, member_value;
-
-				// 로그인 여부 확인
-				if (!sessionStorage.getItem('member_key')) {
-					console.log('세션에 사용자 정보가 없습니다 - 로그인 페이지로 리디렉션');
-					// 현재 URL을 세션 스토리지에 저장
-					const currentUrl = window.location.pathname + window.location.search;
-					sessionStorage.setItem('redirectAfterLogin', currentUrl);
-					// 로그인 페이지로 리디렉션
-					window.location.href = '/login';
-					return;
-				}
-
-				// 아이템이 있으면
-				try {
-					member_value = JSON.parse(sessionStorage.getItem('member_key'));
-					console.log('로드된 사용자 정보:', member_value);
-
-					if (!member_value || !member_value.email) {
-						console.error('세션에 사용자 정보가 없거나 불완전합니다');
+				// REFACTORING: 사용자 인증 로직 단순화
+				// 서버에서 사용자 정보가 없는 경우만 세션스토리지 확인
+				if (!user) {
+					// 로그인 상태 확인 및 처리
+					if (!sessionStorage.getItem('member_key')) {
 						// 로그인 페이지로 리디렉션
+						const currentUrl = window.location.pathname + window.location.search;
+						sessionStorage.setItem('redirectAfterLogin', currentUrl);
 						window.location.href = '/login';
 						return;
 					}
 
-					setCurrentMember(member_value);
+					// 세션스토리지에서 사용자 정보 가져오기
+					try {
+						const member_value = JSON.parse(sessionStorage.getItem('member_key'));
 
-					if (item_value) {
-						console.log('기존 문서 로드 중:', item_value);
-
-						try {
-							// 변경: 새로운 API 클라이언트를 사용하여 드래프트 데이터 로드
-							const fetchedData = await draftingApi.getDraft(item_value);
-							console.log('드래프트 데이터 로드 완료:', fetchedData);
-
-							contract_id = fetchedData.id;
-
-							// contractData에서 필요한 데이터 추출
-							const data = fetchedData.contractData;
-
-							console.log('계약서 데이터:', data);
-
-							// 데이터 확인 및 처리
-							if (!data || !data.question_array || !data.clause_array) {
-								console.error('필수 계약서 데이터가 없습니다:', data);
-								alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
-								return;
-							}
-
-							let groupdata = _.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko);
-
-							// 2. inject Data
-							setClauseData(data.clause_array);
-							setQuestionData(data.question_array);
-							setInputData(data.input_array || []);
-							setQuestionGroupData(_.groupBy(_.orderBy(data.question_array, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
-							setAnsweredQuestionData(data.answeredQuestion_array || []);
-							setQuestionGroupKey(Object.keys(groupdata));
-							setGlossary(data.clauseGuide_array || []);
-
-							// 3. init Variables
-							clause_template = data.clause_template; // 변하지 않는 Original Clause Data
-							isLoaded(true);
-							setContractId(contract_id);
-							setDocStatus('문서 수정');
-							setActivityLog(prev => ({ ...prev, docStatus: '문서 수정' }));
-						} catch (error) {
-							console.error('드래프트 데이터 로드 실패:', error);
-							alert('계약서 데이터를 가져오는 데 실패했습니다: ' + error.message);
-							isLoaded(true);
+						if (!member_value || !member_value.email) {
+							window.location.href = '/login';
+							return;
 						}
+
+						setCurrentMember(member_value);
+						setFormSubmitted(member_value.submittedSurvey);
+					} catch (parseError) {
+						window.location.href = '/login';
+						return;
+					}
+				}
+
+				// ID 파라미터 처리 (URL 또는 세션스토리지)
+				item_value = searchParams.get('_id') || searchParams.get('id') || sessionStorage.getItem('item_key');
+				let contract_id;
+
+				// 기존 문서 로드 또는 신규 문서 작성 분기
+				if (item_value) {
+					// 기존 문서 로드
+					try {
+						const fetchedData = await draftingApi.getDraft(item_value);
+						contract_id = fetchedData.id;
+						const data = fetchedData.contractData;
+
+						// 데이터 유효성 검사
+						if (!data || !data.question_array || !data.clause_array) {
+							alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
+							return;
+						}
+
+						// 질문 그룹화
+						const groupdata = groupQuestionsByCategory(data.question_array);
+
+						// 데이터 주입
+						setClauseData(data.clause_array);
+						setQuestionData(data.question_array);
+						setInputData(data.input_array || []);
+						setQuestionGroupData(groupdata);
+						setAnsweredQuestionData(data.answeredQuestion_array || []);
+						setQuestionGroupKey(Object.keys(groupdata));
+						setGlossary(data.clauseGuide_array || []);
+
+						// 변수 초기화
+						clause_template = data.clause_template;
+						isLoaded(true);
+						setContractId(contract_id);
+						setDocStatus('문서 수정');
+						setActivityLog(prev => ({ ...prev, docStatus: '문서 수정' }));
+					} catch (error) {
+						alert('계약서 데이터를 가져오는 데 실패했습니다: ' + error.message);
+						isLoaded(true);
+					}
+				} else {
+					// 신규 문서 작성
+					// 데이터 소스 결정 (서버사이드 또는 클라이언트)
+					let data;
+					if (contractData) {
+						data = contractData;
 					} else {
-						let query1 = '10';
-						let query2 = contract.type;
-						console.log('신규 계약서 작성 - contract 정보:', contract);
-						console.log('API 호출 파라미터 - query1:', query1, 'query2:', query2);
-
-						// 로딩 표시
-						isLoaded(false);
-
+						// 클라이언트에서 데이터 로드
 						try {
-							console.log('fetchProcessedData 호출 전');
-							const data = await fetchProcessedData(query1, query2);
-							console.log('fetchProcessedData 호출 후 - 결과:', data);
-
-							// 백엔드 응답 데이터 더 자세히 기록
-							console.log('응답 데이터 구조:', Object.keys(data));
-							console.log('clause 데이터 존재:', !!data.clause, '길이:', data.clause?.length);
-							console.log('question 데이터 존재:', !!data.question, '길이:', data.question?.length);
-							console.log('grouped_question 데이터 존재:', !!data.grouped_question);
-
-							// 데이터 검증
-							if (!data || !data.clause || !data.question) {
-								console.error('필수 데이터가 없습니다:', data);
-								alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
-								return;
-							}
-
-							contract_id = uuidv4();
-							console.log('[FETCH] data', data);
-
-							// 2. 데이터 주입
-							setClauseData(data.clause);
-							setQuestionData(data.question);
-							setInputData(data.input_array || []);
-
-							// 질문 데이터가 있는지 확인하고 처리
-							if (data.question && data.question.length > 0) {
-								// 빈 binding_question_ko 확인 및 설정
-								const processedQuestions = data.question.map(q => {
-									if (!q.binding_question_ko) {
-										console.log(`질문에 binding_question_ko가 없습니다. ID: ${q.id}, 기본값 설정합니다.`);
-										return { ...q, binding_question_ko: '기본 정보' };
-									}
-									return q;
-								});
-
-								// 가공된 질문 데이터로 업데이트
-								if (processedQuestions !== data.question) {
-									console.log('가공된 질문 데이터로 업데이트합니다.');
-									setQuestionData(processedQuestions);
-								}
-
-								// grouped_question이 없는 경우 직접 생성
-								if (!data.grouped_question) {
-									console.log('grouped_question이 없어 직접 생성합니다.');
-									const groupedData = _.groupBy(_.orderBy(processedQuestions, ['midx', 'qidx'], ['asc', 'asc']), q => q.binding_question_ko || '기본 정보');
-									console.log('생성된 grouped_question의 키:', Object.keys(groupedData));
-
-									// 최소한 하나의 그룹이 있는지 확인
-									if (Object.keys(groupedData).length === 0) {
-										console.error('생성된 grouped_question이 비어 있습니다. 기본 그룹 생성');
-										groupedData['기본 정보'] = processedQuestions;
-									}
-
-									setQuestionGroupData(groupedData);
-									setQuestionGroupKey(Object.keys(groupedData));
-								} else {
-									// 기존 그룹화 데이터 사용
-									setQuestionGroupData(data.grouped_question);
-									const groupKeys = Object.keys(data.grouped_question);
-									console.log('기존 grouped_question의 키:', groupKeys);
-
-									if (groupKeys.length === 0) {
-										console.error('백엔드에서 받은 grouped_question이 비어 있습니다. 기본 그룹 생성');
-										const defaultGroup = { '기본 정보': processedQuestions };
-										setQuestionGroupData(defaultGroup);
-										setQuestionGroupKey(['기본 정보']);
-									} else {
-										setQuestionGroupKey(groupKeys);
-									}
-								}
-							} else {
-								console.error('질문 데이터가 비어 있습니다. 기본 그룹 생성');
-								const emptyGroup = { '기본 정보': [] };
-								setQuestionGroupData(emptyGroup);
-								setQuestionGroupKey(['기본 정보']);
-							}
-
-							setGlossary(data.clauseGuide || []);
-
+							data = await fetchProcessedData('10', contract.type);
+						} catch (fetchError) {
+							alert('계약서 데이터를 가져오는 데 실패했습니다. 페이지를 새로고침해주세요.');
 							isLoaded(true);
-							setContractId(contract_id);
-							// 3. 변수 초기화
-							clause_template = R.clone(data.clause); // 변하지 않는 Original Clause Data
-							question_template = [...data.question]; // 변하지 않는 Original Question Data
-							setDocStatus('신규 작성');
-							setActivityLog(prev => ({ ...prev, docStatus: '신규 작성' }));
-						} catch (error) {
-							console.error('데이터 로딩 오류:', error);
-							console.error('에러 상세:', error.response?.data || error.message);
-							alert('계약서 데이터를 가져오는 데 실패했습니다: ' + error.message);
-							isLoaded(true); // 로딩 상태 해제
+							return;
 						}
 					}
-					setFormSubmitted(member_value.submittedSurvey);
-					setActivityLog(prev => ({ ...prev, ...{ id: contract_id, title: contract.category + ' 계약서', docId: contract_id, _userName: member_value.name, userEmail: member_value.email } }));
-				} catch (parseError) {
-					console.error('사용자 정보 파싱 오류:', parseError);
-					// 로그인 페이지로 리디렉션
-					window.location.href = '/login';
-					return;
+
+					// 데이터 유효성 검사
+					if (!data || !data.clause || !data.question) {
+						alert('계약서 데이터 형식이 올바르지 않습니다. 다시 시도해 주세요.');
+						isLoaded(true);
+						return;
+					}
+
+					contract_id = uuidv4();
+
+					// 데이터 주입
+					setClauseData(data.clause);
+					setQuestionData(data.question);
+					setInputData(data.input_array || []);
+
+					// 질문 데이터 처리
+					if (data.question && data.question.length > 0) {
+						// binding_question_ko 유효성 확인 및 설정
+						const processedQuestions = data.question.map(q => (!q.binding_question_ko ? { ...q, binding_question_ko: '기본 정보' } : q));
+
+						// 질문 데이터로 업데이트
+						if (processedQuestions !== data.question) {
+							setQuestionData(processedQuestions);
+						}
+
+						// 그룹화 데이터 처리
+						if (!data.grouped_question) {
+							// 직접 생성
+							const groupedData = groupQuestionsByCategory(processedQuestions);
+
+							// 그룹 데이터 유효성 확인
+							if (Object.keys(groupedData).length === 0) {
+								const defaultGroup = { '기본 정보': processedQuestions };
+								setQuestionGroupData(defaultGroup);
+								setQuestionGroupKey(['기본 정보']);
+							} else {
+								setQuestionGroupData(groupedData);
+								setQuestionGroupKey(Object.keys(groupedData));
+							}
+						} else {
+							// 기존 그룹화 데이터 사용
+							setQuestionGroupData(data.grouped_question);
+							const groupKeys = Object.keys(data.grouped_question);
+
+							if (groupKeys.length === 0) {
+								const defaultGroup = { '기본 정보': processedQuestions };
+								setQuestionGroupData(defaultGroup);
+								setQuestionGroupKey(['기본 정보']);
+							} else {
+								setQuestionGroupKey(groupKeys);
+							}
+						}
+					} else {
+						// 질문 데이터가 없는 경우 기본 그룹 설정
+						setQuestionGroupData({ '기본 정보': [] });
+						setQuestionGroupKey(['기본 정보']);
+					}
+
+					setGlossary(data.clauseGuide || []);
+					isLoaded(true);
+					setContractId(contract_id);
+					// 3. 변수 초기화
+					clause_template = deepClone(data.clause); // 변하지 않는 Original Clause Data
+					question_template = [...data.question]; // 변하지 않는 Original Question Data
+					setDocStatus('신규 작성');
+					setActivityLog(prev => ({ ...prev, docStatus: '신규 작성' }));
+				}
+
+				// 활동 로그 초기화
+				const memberInfo = user || (currentMember && typeof currentMember === 'object' ? currentMember : null);
+				if (memberInfo) {
+					setActivityLog(prev => ({
+						...prev,
+						id: contract_id,
+						title: contract.category + ' 계약서',
+						docId: contract_id,
+						_userName: memberInfo.name,
+						userEmail: memberInfo.email,
+					}));
 				}
 			} catch (error) {
-				console.error('페이지 데이터 로딩 중 오류 발생:', error);
 				alert('페이지 로딩 중 오류가 발생했습니다. 페이지를 새로고침하거나 다시 로그인해주세요.');
 			}
 		}
 		getPageData();
 	}, []);
-
-	function postSaveLog() {
-		let saveLog = { userName: currentMember.name, userEmail: currentMember.email, category: contract.title, title: `${contract.category} 계약서`, contractId: contractId };
-		console.log('saveLog', saveLog);
-		// post_saveLog(saveLog);
-	}
 
 	// draft log post
 	useEffect(() => {
@@ -327,7 +335,7 @@ export default function Draft({ contract }) {
 			post_draftLog(draftLog);
 			post_activityLog(activityLog);
 		}
-	}, [docStatus, currentMember]);
+	}, [docStatus, currentMember, contractId, activityLog, contract.title, contract.category]);
 
 	/* useEffect Hook (2) - SCROLL HOOK */
 	// lastInput이 업데이트 되면 스크롤 해주고
@@ -336,9 +344,7 @@ export default function Draft({ contract }) {
 	const updateAnsweredQuestion = () => {
 		const filteredQuestionData = questionData.filter(x => x.value && x.value.length > 0);
 		// console.log('filteredQuestionData', filteredQuestionData)
-		let newState = [...answeredQuestionData];
-		newState = filteredQuestionData;
-		setAnsweredQuestionData(newState);
+		setAnsweredQuestionData(filteredQuestionData);
 	};
 
 	const afterRenderFunction = useCallback(async () => {
@@ -358,7 +364,12 @@ export default function Draft({ contract }) {
 	useEffect(() => {
 		const unloadCallback = event => {
 			// console.log('이탈발생')
-			let saveLog = { ...activityLog, ...{ endTime: timestamp(), duration: timeDiffSec(activityLog.startTime, timestamp()), durationMin: timeDiffMin(activityLog.startTime, timestamp()) } };
+			let saveLog = {
+				...activityLog,
+				endTime: timestamp(),
+				duration: timeDiffSec(activityLog.startTime, timestamp()),
+				durationMin: timeDiffMin(activityLog.startTime, timestamp()),
+			};
 			post_activityLog(saveLog);
 			// console.log('saveLog', saveLog)
 			event.preventDefault();
@@ -373,106 +384,74 @@ export default function Draft({ contract }) {
 
 	/* useEffect Hook (3) - 로그 확인용 & 데이터 저장용 HOOK */
 	useEffect(() => {
-		if (loaded === true) {
-			// 상태 업데이트 및 로그 기록
-			setQuestionProgress();
+		// REFACTORING: 데이터 저장 로직 최적화
+		if (!loaded) return;
 
-			// 디버깅: 세션 스토리지에서 사용자 정보 확인
-			const memberData = sessionStorage.getItem('member_key');
-			console.log('세션에 저장된 사용자 정보:', memberData ? JSON.parse(memberData) : '없음');
+		// 상태 업데이트 및 로그 기록
+		setQuestionProgress();
 
-			// member_id 가져오기
-			const member_id = getMemberIdFromStorage();
-			console.log('가져온 member_id:', member_id);
+		// 저장/내보내기 버튼이 활성화된 경우에만 처리
+		if (!saveBtnState && !exportBtnState) return;
 
-			if (!member_id) {
-				console.error('사용자 ID를 가져올 수 없습니다. 로그인 상태를 확인하세요.');
-			}
+		// 저장할 데이터 구조 구성
+		const toSave = {
+			id: contractId,
+			contract_title: contract.title,
+			type: contract.category,
+			status: 'stage1',
+			contract_data: {
+				questionGroup_array: questionGroupData,
+				question_array: questionData,
+				clause_template: clause_template,
+				clause_array: clauseData,
+				input_array: inputData,
+				clauseGuide_array: glossary,
+				answeredQuestion_array: answeredQuestionData,
+			},
+			query: contract.type,
+			contract_info: contract,
+			progress: activityLog.docProgress,
+		};
 
-			// 저장할 데이터 구조 구성 - Supabase drafting_data 테이블 스키마에 맞춤
-			let toSave = {
-				id: contractId,
-				contract_title: contract.title,
-				type: contract.category,
-				status: 'stage1',
-				contract_data: {
-					questionGroup_array: questionGroupData,
-					question_array: questionData,
-					clause_template: clause_template,
-					clause_array: clauseData,
-					input_array: inputData,
-					clauseGuide_array: glossary,
-					answeredQuestion_array: answeredQuestionData,
-				},
-				query: contract.type,
-				contract_info: contract,
-				member_id: member_id, // 명시적으로 member_id 설정
-				progress: activityLog.docProgress,
-			};
+		// 저장 버튼이 눌렸을 때
+		if (saveBtnState) {
+			// 토큰 확인 및 재설정
+			resetAuthToken();
 
-			console.log('if 밖에서. toSave', toSave);
-			// 저장 버튼이 눌렸을 때
-			if (saveBtnState === true) {
-				// 유효한 member_id가 없으면 저장하지 않고 로그인 페이지로 리디렉션
-				if (!member_id) {
-					console.error('사용자 정보를 찾을 수 없습니다. 로그인이 필요합니다.');
-					alert('사용자 정보를 찾을 수 없습니다. 로그인해 주세요.');
+			// 데이터 저장 요청
+			draftingApi
+				.saveDraft(toSave)
+				.then(response => {
+					setSaveToastState(true);
+				})
+				.catch(error => {
+					let errorMsg = '데이터 저장에 실패했습니다';
+
+					// 로그인 관련 오류인 경우 로그인 페이지로 리디렉션
+					if (error.status === 401 || error.status === 403) {
+						// 현재 URL을 세션 스토리지에 저장 후 로그인 페이지로 리디렉션
+						const currentUrl = window.location.pathname + window.location.search;
+						sessionStorage.setItem('redirectAfterLogin', currentUrl);
+						window.location.href = '/login';
+						return;
+					} else if (error.message) {
+						errorMsg += ': ' + error.message;
+					}
+
+					alert(errorMsg);
+				})
+				.finally(() => {
 					setSaveBtnState(false);
-
-					// 현재 URL을 세션 스토리지에 저장 후 로그인 페이지로 리디렉션
-					const currentUrl = window.location.pathname + window.location.search;
-					sessionStorage.setItem('redirectAfterLogin', currentUrl);
-					window.location.href = '/login';
-					return;
-				}
-
-				// 토큰 확인 및 재설정
-				resetAuthToken();
-				console.log('토큰 있음:', localStorage.getItem('auth_token'));
-
-				// 새로운 API 클라이언트를 통해 데이터 저장
-				console.log('저장 요청 데이터:', toSave);
-				draftingApi
-					.saveDraft(toSave)
-					.then(response => {
-						console.log('드래프트 저장 성공:', response);
-						setSaveToastState(true);
-						// postSaveLog();
-					})
-					.catch(error => {
-						console.error('드래프트 저장 실패:', error);
-
-						// 오류 상세 정보 표시
-						let errorMsg = '데이터 저장에 실패했습니다';
-
-						// 로그인 관련 오류인 경우 로그인 페이지로 리디렉션
-						if (error.status === 401 || error.status === 403) {
-							errorMsg += ': 로그인이 필요합니다';
-							alert(errorMsg);
-							setSaveBtnState(false);
-
-							// 현재 URL을 세션 스토리지에 저장 후 로그인 페이지로 리디렉션
-							const currentUrl = window.location.pathname + window.location.search;
-							sessionStorage.setItem('redirectAfterLogin', currentUrl);
-							window.location.href = '/login';
-							return;
-						} else if (error.message) {
-							errorMsg += ': ' + error.message;
-						}
-
-						alert(errorMsg);
-						setSaveBtnState(false);
-					});
-			}
-
-			// 내보내기 버튼이 눌렸을 때
-			if (exportBtnState === true) {
-				exportContent(clauseData, inputData, contract.category);
-				setExportBtnState(false);
-			}
+				});
 		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [clauseData, contract, questionData, inputData, loaded, questionGroupData, questionGroupKey, saveBtnState, exportBtnState, glossary, answeredQuestionData, contractId, currentMember]);
+
+		// 내보내기 버튼이 눌렸을 때
+		if (exportBtnState) {
+			exportContent(clauseData, inputData, contract.category);
+			setExportBtnState(false);
+		}
+		// REFACTORING: 불필요한 의존성 제거 - 실제로 사용하는 상태만 포함
+	}, [loaded, saveBtnState, exportBtnState, contractId, contract, clauseData, inputData, questionData, questionGroupData, glossary, answeredQuestionData, activityLog.docProgress]);
 
 	/**
 	 * Trigger 질문 답변 -> 조항 추가/삭제
@@ -537,7 +516,7 @@ export default function Draft({ contract }) {
 		for (let i = 0; i < activeClauses.length; i++) {
 			clause_keys.push(activeClauses[i].clause_trigger); // push all keys to array
 		}
-		clause_keys = _.uniq(_.flattenDeep(clause_keys)).sort(); // flat array, remove duplicates, sort ascending
+		clause_keys = uniqueArray(flatten(clause_keys)).sort(); // flat array, remove duplicates, sort ascending
 		// console.log('[syncInputSection] currentBindingKeys', clause_keys)
 		// 부모 질문 답변이 안 된 경우에는 계약 variable에 따라서 미리 질문이 추가될 수 있기 때문에
 		// 부모 질문 답변이 안 된 경우에는 질문 추가 하지 않는다.
@@ -567,7 +546,7 @@ export default function Draft({ contract }) {
 		} else {
 			// dropdown의 경우에는 value를 업데이트 해 줘야 재렌더링 되어도 값이 남아있다
 			setQuestionData(newState);
-			setQuestionGroupData(_.groupBy(_.orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
+			setQuestionGroupData(groupBy(orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
 		}
 	};
 
@@ -590,7 +569,7 @@ export default function Draft({ contract }) {
 			handleCheckboxState(newState, item, index); // 체크박스 또는 라디오는 옵션 checked를 바꿔주고, 이 함수 안에서 set state 해줌
 		} else {
 			setQuestionData(newState);
-			setQuestionGroupData(_.groupBy(_.orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
+			setQuestionGroupData(groupBy(orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
 		}
 	};
 
@@ -598,10 +577,13 @@ export default function Draft({ contract }) {
 	 * 일반질문 답변 -> clauseData.binding_input 렌더링
 	 */
 	const handleClauseData = (idx, key, newValue) => {
-		// console.log('[handleClauseData] FUNCTION TRIGGERED - handleClauseData')
-		// console.log('[handleClauseData] inside handleClauseData', idx, key, newValue)
+		// REFACTORING: 불필요한 console.log 제거
 		setNeedSave(true);
 		if (!idx) return; // idx 없을 시 에러 안뜨게 return. 새로고침 에러떠서 추가함
+
+		// REFACTORING: 중복 로직 개선 - forEach 안에서 newState를 매번 생성하지 않고 한 번만 생성
+		const newState = [...clauseData];
+
 		idx.forEach(i => {
 			const targetArr = [...clauseData[i].binding_input];
 			const newArr = replaceArray(targetArr, key, newValue);
@@ -619,6 +601,7 @@ export default function Draft({ contract }) {
 
 	/**
 	 * 일반질문 답변 -> 조항 본문 하이라이트 추가/제거 처리
+	 * REFACTORING: 함수 로직 단순화 및 중복 제거
 	 */
 	function handleHighlight(newState, cidx, key) {
 		// console.log('[handleHighlight] cidx', cidx)
@@ -636,13 +619,13 @@ export default function Draft({ contract }) {
 				// console.log(`newState[${i}] before : `, newState[i].content_en)
 				newState[i].content_en = removeHighlight(newState[i].content_en, lastInput['obj'], lastInput['key']); // removeHighlight => clauseData 에서 바꿔줘야지 조항 데이터가 유지됨
 
-				newState[i] = R.set(R.lensProp('id'), uuidv4(), newState[i]);
+				newState[i] = setProp('id', uuidv4(), newState[i]);
 				// setClauseData(newState)
 			});
 			cidx.forEach(i => {
 				tracer = getKeyAndValue(clauseData[i].binding_input); // [key: [...], value: [...]]
 				newState[i].content_en = replaceMulCharInString(clause_template[i].content_en, tracer, tracerKey); // replaceMulCharInString = clause_template 에서
-				newState[i] = R.set(R.lensProp('id'), uuidv4(), newState[i]);
+				newState[i] = setProp('id', uuidv4(), newState[i]);
 				// setClauseData(newState)
 			});
 		} else {
@@ -659,18 +642,19 @@ export default function Draft({ contract }) {
 				// newState[i].content_en = replaceMulCharInString(newState[i].content_en, tracer, tracerKey)
 				newState[i].content_en = replaceMulCharInString(clause_template[i].content_en, tracer, tracerKey);
 
-				newState[i] = R.set(R.lensProp('id'), uuidv4(), newState[i]);
+				newState[i] = setProp('id', uuidv4(), newState[i]);
 				// setClauseData(newState)
 			});
 		}
+
 		setClauseData(newState);
 	}
 
 	/**
 	 * 라디오/체크박스 "checked" 처리
+	 * REFACTORING: 불필요한 console.log 제거 및 로직 단순화
 	 */
 	const handleCheckboxState = (newState, item, index) => {
-		console.log('[handleCheckboxState] item!!!!!!', item);
 		index = parseInt(index);
 		console.log('[handleCheckboxState] index from handleCheckboxState', index);
 
@@ -681,19 +665,19 @@ export default function Draft({ contract }) {
 				if (item.question_type.includes('checkbox')) {
 					console.log('[handleCheckboxState] if checkbox 들어옴');
 					if (newOptions[index].checked === 'checked') {
-						newOptions[index] = R.set(R.lensProp('checked'), '', newOptions[index]);
+						newOptions[index] = setProp('checked', '', newOptions[index]);
 					} else {
-						newOptions[index] = R.set(R.lensProp('checked'), 'checked', newOptions[index]);
+						newOptions[index] = setProp('checked', 'checked', newOptions[index]);
 					}
 				} else if (item.question_type.includes('radio') || item.question_type.includes('dropdown')) {
 					console.log('[handleCheckboxState] else if radio 들어옴');
 					for (let i = 0; i < newOptions.length; i++) {
 						if (i === index) {
 							console.log('[handleCheckboxState] 1', i, index, newOptions.length);
-							newOptions[i] = R.set(R.lensProp('checked'), 'checked', newOptions[i]);
+							newOptions[i] = setProp('checked', 'checked', newOptions[i]);
 						} else {
 							console.log('[handleCheckboxState] 2', i, index, newOptions.length);
-							newOptions[i] = R.set(R.lensProp('checked'), '', newOptions[i]);
+							newOptions[i] = setProp('checked', '', newOptions[i]);
 						}
 					}
 					console.log('[handleCheckboxState] after loop', newOptions);
@@ -703,7 +687,7 @@ export default function Draft({ contract }) {
 			return obj; // otherwise return the object as is
 		});
 		setQuestionData(newState);
-		setQuestionGroupData(_.groupBy(_.orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
+		setQuestionGroupData(groupBy(orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
 	};
 
 	/**
@@ -732,30 +716,30 @@ export default function Draft({ contract }) {
 
 	/**
 	 * 일반질문 답변 -> 인풋 Event Handler (메인 event handler임)
+	 * REFACTORING: 불필요한 console.log 제거 및 조건문 단순화
 	 */
 	const onChangeHandler = e => {
-		console.log('Entered onChangeHandler');
 		let binding_value, index;
 		let item = findItem(questionData, e.target.id, 'id'); // returns object
-		console.log('onchange item', item);
+
 		tracerKey = item.binding_key;
 		cidx = item.binding_cidx;
 
+		// 입력 타입에 따라 value 처리
 		if (item.question_type === 'input_currency') {
-			console.log('[onChangeHandler] input_currency entered');
 			binding_value = returnCurrencyValue(e);
 		} else if (item.question_type.includes('dropdown')) {
-			console.log("item.options[e.target.getAttribute('name')].value", item.options[e.target.getAttribute('name')].value);
 			binding_value = item.options[e.target.getAttribute('name')].value;
 		} else {
 			binding_value = returnInputValue(e, item);
 		}
-		// find index for checkbox and radio inputs
+
+		// checkbox, radio 인덱스 확인
 		if (e.target.getAttribute('index')) {
 			index = e.target.getAttribute('index');
-			console.log('[onChangeHandler] index from onChange', index);
 		}
-		// if trigger run 1
+
+		// 데이터 처리 분기
 		if (item.output_type.includes('trigger')) {
 			syncOutputSection(item.binding_cidx, binding_value, item, index, item.id);
 		} else {
@@ -766,9 +750,7 @@ export default function Draft({ contract }) {
 		}
 
 		// 질문 응답 후 진행률 업데이트
-		setTimeout(() => {
-			setQuestionProgress();
-		}, 100);
+		setTimeout(setQuestionProgress, 100);
 	};
 
 	function setQuestionProgress() {
@@ -781,7 +763,12 @@ export default function Draft({ contract }) {
 		// setProgress(progressPercentage); // 나중에 사용할 주석.
 
 		// 기존 활동 로그 기록 유지
-		setActivityLog(prev => ({ ...prev, ...{ endTime: timestamp(), docProgress: currentProgress, duration: timeDiffSec(prev.startTime, timestamp()), durationMin: timeDiffMin(prev.startTime, timestamp()) } }));
+		updateActivityLog({
+			endTime: timestamp(),
+			docProgress: currentProgress,
+			duration: timeDiffSec(activityLog.startTime, timestamp()),
+			durationMin: timeDiffMin(activityLog.startTime, timestamp()),
+		});
 	}
 
 	// ("이전질문", "다음질문" 버튼 눌렀을 때 작동) 버튼 event handler
@@ -902,7 +889,6 @@ export default function Draft({ contract }) {
 			}
 		}
 	};
-	let qNo = 0;
 
 	// SidePanel의 '수정하기' 클릭시 event handler
 	const onEditClickHandler = e => {
@@ -925,10 +911,10 @@ export default function Draft({ contract }) {
 		console.log('qIndex', qIndex);
 		// console.log('toggleState', !newState[qIndex].bool_question_tip)
 		newState[qIndex].bool_question_tip = !newState[qIndex].bool_question_tip;
-		newState[qIndex] = R.set(R.lensProp('id'), uuidv4(), newState[qIndex]);
+		newState[qIndex] = setProp('id', uuidv4(), newState[qIndex]);
 
 		setQuestionData(newState);
-		setQuestionGroupData(_.groupBy(_.orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
+		setQuestionGroupData(groupBy(orderBy(newState, ['midx', 'qidx'], ['asc', 'asc']), _ => _.binding_question_ko));
 	}
 
 	//   h-[calc(100vh-9rem)]
@@ -1002,22 +988,107 @@ export default function Draft({ contract }) {
 	);
 }
 
-export async function getStaticPaths() {
-	const response = await fetch('https://conan.ai/_functions/getAllTemplateInfo');
-	const res = await response.json();
-	const data = res.items;
+export async function getServerSideProps({ params, req, res }) {
+	console.log(`[getServerSideProps] 요청 타입: ${params.type}`);
 
-	const paths = data.map(item => ({
-		params: { type: item.type.toString() },
-	}));
-	return { paths, fallback: false };
-}
+	try {
+		// REFACTORING: API_BASE_URL 상수를 상단에 배치하여 코드를 더 깔끔하게 만듭니다
+		const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+		const cookies = req.headers.cookie || '';
+		const authToken = req.cookies?.auth_token || '';
 
-export async function getStaticProps({ params }) {
-	// const { type } = query
-	const response = await fetch(`https://conan.ai/_functions/getTemplateInfo/${params.type}`);
-	const res = await response.json();
-	const data = res.items;
+		// REFACTORING: 오류 처리 및 리디렉션을 위한 공통 함수 생성
+		const redirectToError = (errorType, message) => {
+			return {
+				redirect: {
+					destination: `/dashboard?error=${errorType}&message=${encodeURIComponent(message)}`,
+					permanent: false,
+				},
+			};
+		};
 
-	return { props: { contract: data } };
+		// 사용자 인증 상태 확인
+		const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
+			headers: { Cookie: cookies },
+			credentials: 'include',
+		});
+
+		// 인증되지 않은 경우 로그인 페이지로 리디렉션
+		if (!userResponse.ok) {
+			return {
+				redirect: {
+					destination: `/login?redirect=/draft/${params.type}`,
+					permanent: false,
+				},
+			};
+		}
+
+		// 사용자 정보 가져오기
+		const user = await userResponse.json();
+
+		// 템플릿 정보 가져오기
+		let templateInfo;
+		try {
+			templateInfo = await fetchTemplateInfo(params.type);
+		} catch (error) {
+			return redirectToError('template', '템플릿 정보를 가져올 수 없습니다');
+		}
+
+		if (!templateInfo) {
+			return redirectToError('template', '템플릿 정보를 가져올 수 없습니다');
+		}
+
+		// 템플릿 처리 데이터 가져오기
+		let processedData;
+		try {
+			// 헤더 구성
+			const headers = {
+				'Content-Type': 'application/json',
+				...(cookies && { Cookie: cookies }),
+				...(authToken && { Authorization: `Bearer ${authToken}` }),
+			};
+
+			// 백엔드 API 요청
+			const response = await fetch(`${API_BASE_URL}/api/template/process`, {
+				method: 'POST',
+				headers,
+				body: JSON.stringify({
+					query1: '10',
+					query2: params.type,
+					type: params.type,
+				}),
+				credentials: 'include',
+			});
+
+			if (!response.ok) {
+				throw new Error(`백엔드 API 호출 실패: ${response.status}`);
+			}
+
+			processedData = await response.json();
+		} catch (error) {
+			return redirectToError('template', '템플릿 처리 데이터를 가져올 수 없습니다');
+		}
+
+		// 처리 데이터를 가져오지 못한 경우
+		if (!processedData) {
+			return redirectToError('template', '템플릿 처리 데이터를 가져올 수 없습니다');
+		}
+
+		// 정상적으로 데이터를 가져온 경우
+		return {
+			props: {
+				contract: templateInfo,
+				contractData: processedData,
+				user,
+			},
+		};
+	} catch (error) {
+		// 오류 발생 시 로그인 페이지로 리디렉션
+		return {
+			redirect: {
+				destination: `/login?redirect=/draft/${params.type}&error=true`,
+				permanent: false,
+			},
+		};
+	}
 }

@@ -1,105 +1,124 @@
-import axios from 'axios';
-import _ from 'lodash';
+/**
+ * 템플릿 데이터 처리 API
+ * 백엔드에서 계약서 템플릿 데이터를 가져와 가공하는 API 라우트
+ */
 
-export default async function handle(req, res) {
+// 백엔드 API 기본 URL
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+
+export default async function handler(req, res) {
+	// 요청 파라미터 확인
+	const { query1, query2 } = req.method === 'GET' ? req.query : req.body;
+
+	console.log(`[getProcessedData] API 요청 파라미터: query1=${query1}, query2=${query2}`);
+
+	if (!query1 && !query2) {
+		return res.status(400).json({ error: '필수 파라미터가 누락되었습니다.' });
+	}
+
 	try {
-		// 환경 변수 또는 기본값으로 API URL 설정
-		const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082/api';
+		// 백엔드 API 엔드포인트 설정
+		const url = `${API_BASE_URL}/api/template/process`;
+		console.log(`[getProcessedData] 템플릿 데이터 처리 API 호출 URL: ${url}`);
 
 		// 요청 시작 시간 기록 (성능 측정용)
 		const startTime = Date.now();
 
-		// 클라이언트에서 query1, query2를 GET 요청 파라미터로 받음
-		const { query1, query2 } = req.query;
-		console.log(`[getProcessedData] API 요청 파라미터: query1=${query1}, query2=${query2}`);
+		// 백엔드 API 호출
+		const response = await fetch(url, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: req.headers.authorization || '',
+				Cookie: req.headers.cookie || '',
+			},
+			body: JSON.stringify({
+				type: query2 || query1,
+			}),
+			credentials: 'include',
+		});
 
-		try {
-			// 경로 변경: 이전에는 /clause/filtered와 /question/filtered를 사용했지만
-			// 이제는 리팩터링된 백엔드 구조에 맞게 `/template/process` 단일 엔드포인트를 사용
-			const apiUrl = `${API_BASE_URL}/template/process`;
-			console.log(`[getProcessedData] 템플릿 데이터 처리 API 호출 URL: ${apiUrl}`);
+		// 응답 시간 계산
+		const responseTime = Date.now() - startTime;
+		console.log(`[getProcessedData] 템플릿 데이터 응답 수신 (${responseTime}ms)`);
 
-			const processedResponse = await axios.get(apiUrl, {
-				params: { query1, query2 },
-				timeout: 8000, // 타임아웃 8초로 증가 (데이터 처리에 시간이 걸릴 수 있음)
-				headers: {
-					Accept: 'application/json',
-					'Content-Type': 'application/json',
-				},
-			});
+		// 응답 상태 코드 확인
+		console.log(`[getProcessedData] 응답 상태 코드: ${response.status}`);
 
-			// 응답 처리 시간 계산
-			const responseTime = Date.now() - startTime;
-			console.log(`[getProcessedData] 템플릿 데이터 응답 수신 (${responseTime}ms)`);
-			console.log(`[getProcessedData] 응답 상태 코드: ${processedResponse.status}`);
-
-			const responseData = processedResponse.data;
-			console.log(`[getProcessedData] 응답 데이터 구조: ${Object.keys(responseData)}`);
-
-			// 응답 데이터 검증
-			if (!responseData.clause || !responseData.question) {
-				console.warn('[getProcessedData] 백엔드에서 필수 데이터(clause 또는 question)가 누락되었습니다');
-				return res.status(500).json({
-					error: true,
-					message: '백엔드에서 필수 데이터가 누락되었습니다',
-					received: Object.keys(responseData),
-				});
-			} else {
-				console.log(`[getProcessedData] 데이터 크기: clause=${responseData.clause.length}, question=${responseData.question.length}`);
-			}
-
-			// question 데이터에 binding_question_ko가 없는 경우 기본값 설정
-			if (responseData.question && responseData.question.length > 0) {
-				console.log('[getProcessedData] question 데이터 검증 및 보완 중...');
-				responseData.question = responseData.question.map(q => {
-					// binding_question_ko가 없으면 기본값 설정
-					if (!q.binding_question_ko) {
-						q.binding_question_ko = '기본 정보';
-					}
-					// 기타 필수 필드에 대한 기본값 설정
-					q.is_default = q.is_default !== undefined ? q.is_default : true;
-					return q;
+		// 오류 응답 처리
+		if (!response.ok) {
+			// 인증 오류인 경우
+			if (response.status === 401 || response.status === 403) {
+				console.error(`[getProcessedData] 인증 오류: ${response.status}`);
+				return res.status(response.status).json({
+					error: '인증이 필요합니다.',
+					status: response.status,
 				});
 			}
 
-			// grouped_question이 없으면 생성
-			if (!responseData.grouped_question && responseData.question && responseData.question.length > 0) {
-				console.log('[getProcessedData] grouped_question 생성 중...');
-				responseData.grouped_question = _.groupBy(_.orderBy(responseData.question, ['midx', 'qidx'], ['asc', 'asc']), q => q.binding_question_ko || '기본 정보');
-				console.log('[getProcessedData] grouped_question 생성 완료:', Object.keys(responseData.grouped_question));
-			}
-
-			// 필수 필드에 빈 배열 기본값 설정
-			responseData.input_array = responseData.input_array || [];
-			responseData.clauseGuide = responseData.clauseGuide || [];
-
-			// 백엔드에서 이미 처리된 데이터를 클라이언트에 전달
-			res.status(200).json(responseData);
-		} catch (apiError) {
-			// axios 오류 상세 정보 추출
-			const errorDetails = apiError.response ? `상태 코드: ${apiError.response.status}, 메시지: ${JSON.stringify(apiError.response.data)}` : apiError.message;
-
-			console.error(`[getProcessedData] ❌ 백엔드 API 호출 실패: ${errorDetails}`);
-
-			// API 요청 실패 시 오류 응답
-			res.status(apiError.response?.status || 500).json({
-				error: true,
-				message: '데이터를 불러오는 중 오류가 발생했습니다.',
-				details: errorDetails,
-				path: req.url,
+			// 기타 오류
+			console.error(`[getProcessedData] API 오류 응답: ${response.status}`);
+			return res.status(response.status).json({
+				error: `템플릿 데이터 요청 실패 (${response.status})`,
+				status: response.status,
 			});
 		}
-	} catch (error) {
-		console.error(`[getProcessedData] ❌ API 요청 처리 중 예상치 못한 오류: ${error.message}`);
-		// 스택 트레이스 로깅 (디버깅용)
-		console.error(error.stack);
 
-		// 최종 오류 시 오류 응답
-		res.status(500).json({
-			error: true,
-			message: '서버 내부 오류가 발생했습니다.',
-			details: error.message,
-			path: req.url,
+		// 응답 데이터 파싱
+		let data;
+		try {
+			data = await response.json();
+		} catch (jsonError) {
+			console.error('[getProcessedData] JSON 파싱 오류:', jsonError);
+
+			// 응답 내용 확인 (디버깅용)
+			try {
+				const textResponse = await response.text();
+				console.error('[getProcessedData] 원본 응답 텍스트:', textResponse.substring(0, 200));
+
+				return res.status(500).json({
+					error: 'JSON 파싱 오류',
+					message: jsonError.message,
+					debugText: textResponse.substring(0, 200),
+				});
+			} catch (textError) {
+				return res.status(500).json({
+					error: 'JSON 및 텍스트 파싱 오류',
+					message: jsonError.message,
+				});
+			}
+		}
+
+		// 데이터 유효성 검증
+		if (!data || typeof data !== 'object') {
+			console.error('[getProcessedData] 유효하지 않은; 데이터 형식:', typeof data);
+			return res.status(500).json({
+				error: '유효하지 않은 데이터 형식',
+				received: typeof data,
+			});
+		}
+
+		// 데이터 구조 로깅
+		console.log(`[getProcessedData] 응답 데이터 구조: ${Object.keys(data).join(',')}`);
+
+		// 주요 데이터 필드 크기 확인
+		if (data.clause) console.log(`[getProcessedData] 데이터 크기: clause=${data.clause.length}`);
+		if (data.question) console.log(`[getProcessedData] question 데이터 크기=${data.question.length}`);
+
+		// 데이터 보강 및 유효성 검증
+		if (data.question && Array.isArray(data.question)) {
+			console.log(`[getProcessedData] question 데이터 검증 및 보완 중...`);
+			// 여기에 question 데이터 검증/보강 로직 추가 가능
+		}
+
+		// 성공 응답 반환
+		return res.status(200).json(data);
+	} catch (error) {
+		console.error('[getProcessedData] 처리 중 오류 발생:', error);
+
+		return res.status(500).json({
+			error: '템플릿 데이터 처리 중 오류',
+			message: error.message,
 		});
 	}
 }

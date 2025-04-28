@@ -8,6 +8,7 @@ import com.typelegal.domain.drafting.dto.DraftingDto;
 import com.typelegal.domain.drafting.exception.DraftingNotFoundException;
 import com.typelegal.domain.member.dao.MemberRepository;
 import com.typelegal.domain.member.domain.Member;
+import com.typelegal.domain.member.application.MemberService;
 import com.typelegal.domain.member.exception.MemberNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class DraftingService {
 
     private final DraftingRepository draftingRepository;
     private final MemberRepository memberRepository;
+    private final MemberService memberService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -181,7 +183,10 @@ public class DraftingService {
     public List<DraftingDto> getDraftsByMemberEmail(String email) {
         log.info("회원 이메일로 드래프트 목록 조회: email={}", email);
         
-        List<Drafting> draftings = draftingRepository.findAllByMemberEmailAndNotDeleted(email);
+        // MemberService에서 가져온 ID 사용
+        UUID memberId = memberService.getMemberIdByEmail(email);
+        List<Drafting> draftings = draftingRepository.findAllByMemberIdAndNotDeleted(memberId);
+        
         return draftings.stream()
                 .map(this::convertToDto)
                 .collect(Collectors.toList());

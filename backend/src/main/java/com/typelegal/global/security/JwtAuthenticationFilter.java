@@ -2,6 +2,7 @@ package com.typelegal.global.security;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.lang.NonNull;
@@ -19,6 +20,7 @@ import java.util.UUID;
 /**
  * JWT 인증 필터
  * 모든 HTTP 요청에 대해 JWT 토큰을 검증하고 인증 처리
+ * Authorization 헤더 또는 쿠키에서 토큰 추출 지원
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -43,17 +45,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             return;
         }
 
-        final String authHeader = request.getHeader("Authorization");
-        final String jwt;
-
-        // Authorization 헤더가 없거나 Bearer 토큰이 아닌 경우 다음 필터로 넘김
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+        // JWT 토큰 추출 시도 (헤더 또는 쿠키에서)
+        String jwt = extractJwtFromRequest(request);
+        
+        // 토큰이 없는 경우 다음 필터로 넘김
+        if (jwt == null) {
             filterChain.doFilter(request, response);
             return;
         }
-
-        // "Bearer " 이후의 문자열이 JWT 토큰
-        jwt = authHeader.substring(7);
         
         try {
             // 토큰에서 정보 추출 시도
@@ -115,5 +114,33 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
         
         filterChain.doFilter(request, response);
+    }
+    
+    /**
+     * HTTP 요청에서 JWT 토큰을 추출합니다.
+     * 1. Authorization 헤더에서 Bearer 토큰 추출 시도
+     * 2. 실패 시 'accessToken' 쿠키에서 추출 시도
+     * 
+     * @param request 요청 객체
+     * @return JWT 토큰 문자열 또는 null
+     */
+    private String extractJwtFromRequest(HttpServletRequest request) {
+        // 1. Authorization 헤더에서 토큰 추출 시도
+        final String authHeader = request.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            return authHeader.substring(7);
+        }
+        
+        // 2. 쿠키에서 토큰 추출 시도
+        Cookie[] cookies = request.getCookies();
+        if (cookies != null) {
+            for (Cookie cookie : cookies) {
+                if ("accessToken".equals(cookie.getName())) {
+                    return cookie.getValue();
+                }
+            }
+        }
+        
+        return null;
     }
 } 

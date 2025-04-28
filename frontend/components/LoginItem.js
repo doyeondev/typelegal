@@ -5,13 +5,17 @@ import Image from 'next/image';
 
 export default function LoginItem() {
 	const [loginError, setLoginError] = useState(false);
+	const [errorMessage, setErrorMessage] = useState('이메일 혹은 비밀번호가 일치하지 않습니다');
 	const [disabled, setDisabled] = useState(false);
+	const [loading, setLoading] = useState(false);
+
 	useEffect(() => {
 		async function getPageData() {
 			localStorage.theme = 'light';
 		}
 		getPageData();
 	}, []);
+
 	const [input, setInput] = useState({
 		userEmail: '',
 		password: '',
@@ -26,40 +30,70 @@ export default function LoginItem() {
 	};
 
 	const onSubmit = () => {
-		// console.log('들어옴')
-		// console.log(input)
+		console.log('로그인 시도:', input.userEmail);
 		setDisabled(true);
+		setLoading(true);
 		let loginInfo = { email: input.userEmail, password: input.password };
 		loginAccount(loginInfo);
 	};
-	async function loginAccount(userInfo) {
-		// console.log('entered loginAccount', userInfo)
-		const apiUrlEndpoint = `https://conan.ai/_functions/loginMember/${userInfo.email}/${userInfo.password}`;
-		const response = await fetch(apiUrlEndpoint);
 
-		if (response.status === 200) {
-			console.log('response', response);
-			const res = await response.json();
-			const data = await res.items;
-			// console.log('data', data)
-			// getMemberType(data._id)
-			const memberInfo = { email: data.user_email, name: data.user_name, submittedSurvey: data.submittedSurvey ? true : false };
-			console.log('memberInfo', memberInfo);
-			sessionStorage.setItem('member_key', JSON.stringify(memberInfo));
-			window.location.reload();
-		} else if (response.status === 404) {
+	async function loginAccount(userInfo) {
+		try {
+			// 기존 외부 API 대신 백엔드 API로 변경
+			const apiUrlEndpoint = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/auth/login`;
+			console.log('로그인 API 호출:', apiUrlEndpoint);
+
+			const response = await fetch(apiUrlEndpoint, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(userInfo),
+				credentials: 'include', // 쿠키를 자동으로 포함
+			});
+
+			console.log('로그인 응답 상태:', response.status);
+
+			if (response.ok) {
+				const data = await response.json();
+				console.log('로그인 성공:', data);
+
+				// JWT 토큰 localStorage에 저장 (백업용)
+				if (data.token) {
+					localStorage.setItem('auth_token', data.token);
+				}
+
+				// 사용자 정보 세션 스토리지에 저장
+				const memberInfo = {
+					id: data.id,
+					email: data.email,
+					name: data.name,
+					role: data.role,
+					submittedSurvey: data.submittedSurvey ? true : false,
+				};
+				console.log('저장된 회원 정보:', memberInfo);
+				sessionStorage.setItem('member_key', JSON.stringify(memberInfo));
+
+				// 페이지 새로고침
+				window.location.href = '/dashboard';
+			} else {
+				// 오류 처리
+				const errorData = await response.json().catch(() => null);
+				console.error('로그인 실패:', errorData || response.statusText);
+
+				setErrorMessage(errorData || '로그인에 실패했습니다. 다시 시도해주세요.');
+				setLoginError(true);
+			}
+		} catch (error) {
+			console.error('로그인 중 오류 발생:', error);
+			setErrorMessage('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
 			setLoginError(true);
+		} finally {
+			setDisabled(false);
+			setLoading(false);
 		}
 	}
 
-	//   async function getMemberType(userId) {
-	//     console.log('entered getMemberType', userId)
-	//     const apiUrlEndpoint = `https://conan.ai/_functions/memberType/${userId}`
-	//     const response = await fetch(apiUrlEndpoint)
-	//     const res = await response.json()
-	//     const data = await res.items
-	//     console.log('data', data)
-	//   }
 	function press(e) {
 		if (e.keyCode == 13) {
 			onSubmit(); //javascript에서는 13이 enter키를 의미함
@@ -81,7 +115,7 @@ export default function LoginItem() {
 						<h1 className="text-xl text-center font-bold leading-tight tracking-tight text-gray-900 md:text-lg dark:text-white">로그인이 필요한 서비스입니다 🙂</h1>
 						<form className="space-y-8" action="#">
 							<div>
-								<label for="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+								<label htmlFor="email" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
 									이메일
 								</label>
 								<input
@@ -100,7 +134,7 @@ export default function LoginItem() {
 								/>
 							</div>
 							<div>
-								<label for="password" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+								<label htmlFor="password" className="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
 									비밀번호
 								</label>
 								<input
@@ -109,8 +143,6 @@ export default function LoginItem() {
 									id="password"
 									placeholder="••••••••"
 									value={input.password}
-									//   onChange={onInputChange}
-									//   onClick={setLoginError(false)}
 									onChange={function (event) {
 										onInputChange(event);
 										setLoginError(false);
@@ -128,7 +160,7 @@ export default function LoginItem() {
 								disabled={disabled}
 								className="disabled:bg-purple-200 disabled:cursor-progress w-full place-content-center cursor-pointer flex text-white bg-purple-500 hover:bg-purple-600 py-2.5 focus:ring-4 focus:ring-purple-300 font-medium rounded-lg text-sm dark:bg-purple-600 dark:hover:bg-purple-700 focus:outline-none dark:focus:ring-purple-800"
 							>
-								로그인
+								{loading ? '로그인 중...' : '로그인'}
 							</button>
 
 							{/* <p className="text-sm font-medium text-gray-500 dark:text-gray-400">
@@ -138,7 +170,7 @@ export default function LoginItem() {
                 </Link>
               </p> */}
 						</form>
-						{loginError && <p className="text-sm text-gray-500 text-center">이메일 혹은 비밀번호가 일치하지 않습니다</p>}
+						{loginError && <p className="text-sm text-red-500 text-center">{errorMessage}</p>}
 					</div>
 				</div>
 			</div>

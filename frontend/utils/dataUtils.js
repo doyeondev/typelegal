@@ -6,16 +6,23 @@ export async function fetchProcessedData(query1, query2) {
 	try {
 		console.log(`[fetchProcessedData] 데이터 요청 시작 - query1:${query1}, query2:${query2}`);
 
-		// 요청 URL 로깅
-		const requestUrl = `/api/getProcessedData?query1=${query1}&query2=${query2}`;
-		console.log(`[fetchProcessedData] 요청 URL: ${requestUrl}`);
+		// 백엔드 API URL 사용
+		const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+		const requestUrl = `${API_BASE_URL}/api/template/process`;
+		console.log(`[fetchProcessedData] 백엔드 직접 요청 URL: ${requestUrl}`);
 
-		// API 라우트 호출 - getProcessedData.js를 통해 백엔드로 요청 전달
+		// 백엔드 API 직접 호출 - POST 방식으로 변경
 		const response = await fetch(requestUrl, {
-			method: 'GET',
+			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json',
 			},
+			body: JSON.stringify({
+				query1: query1 || '10',
+				query2: query2,
+				type: query2, // 이전 코드와의 호환성을 위해 type도 유지
+			}),
+			credentials: 'include', // 쿠키 포함하여 요청
 		});
 
 		// 응답 상태 체크 및 로깅
@@ -40,7 +47,7 @@ export async function fetchProcessedData(query1, query2) {
 
 		// 중요 데이터 확인
 		if (!data.clause || !data.question) {
-			console.warn('[fetchProcessedData] ⚠️ 필수 데이터가 누락되었습니다:', data);
+			console.warn('[fetchProcessedData] 필수 데이터가 누락되었습니다:', data);
 			throw new Error('필수 데이터(clause 또는 question)가 누락되었습니다.');
 		}
 

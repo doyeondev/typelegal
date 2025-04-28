@@ -3,18 +3,17 @@
  */
 
 import { get, post, put } from './httpClient';
-import { getMemberIdFromStorage } from './httpClient';
 
 const draftingApi = {
 	/**
 	 * 사용자의 모든 드래프트 목록을 가져옵니다.
-	 * @param {string} email - 사용자 이메일
 	 * @returns {Promise<Array>} 드래프트 목록
 	 */
-	getMemberDrafts: async email => {
-		console.log(`[draftingApi.getMemberDrafts] 사용자 드래프트 목록 요청: email=${email}`);
+	getMemberDrafts: async () => {
+		console.log(`[draftingApi.getMemberDrafts] 사용자 드래프트 목록 요청`);
 		try {
-			const data = await get(`/api/data/drafting-data?email=${email}`);
+			// 서버가 쿠키에서 사용자 정보를 가져오므로 이메일을 전송할 필요 없음
+			const data = await get(`/api/drafting/user`);
 			console.log(`[draftingApi.getMemberDrafts] 응답 데이터:`, data);
 
 			// 데이터 그대로 반환 (Supabase 필드명 사용)
@@ -44,27 +43,11 @@ const draftingApi = {
 		console.log(`[draftingApi.saveDraft] 드래프트 저장 요청:`, draftData);
 
 		try {
-			// member_id 검증
-			if (!draftData.member_id) {
-				console.error('[draftingApi.saveDraft] member_id가 없습니다. 로그인 상태를 확인하세요.');
-
-				// 세션에서 다시 가져오기 시도
-				const memberId = getMemberIdFromStorage();
-				if (memberId) {
-					console.log('[draftingApi.saveDraft] 세션에서 member_id를 복구했습니다:', memberId);
-					draftData.member_id = memberId;
-				} else {
-					throw new Error('사용자 ID를 찾을 수 없습니다. 다시 로그인해 주세요.');
-				}
-			}
-
-			console.log('draftingAPI member_id 있음');
-			// 데이터 형식 확인 및 변환
+			// 데이터 형식 확인 및 변환 (member_id는 서버에서 인증 쿠키로 확인)
 			const draftingDto = {
 				id: draftData.id,
 				contractTitle: draftData.contract_title,
 				contractData: draftData.contract_data,
-				member_id: draftData.member_id,
 				status: draftData.status || 'stage1',
 				query: draftData.query,
 				contractInfo: draftData.contract_info,
@@ -78,19 +61,12 @@ const draftingApi = {
 				contractInfo: '(생략)',
 			});
 
-			// 멤버 ID를 URL 쿼리 파라미터로 포함하여 요청 (URL과 바디 모두에 포함)
-			const options = {
-				headers: {
-					'X-Member-ID': draftingDto.member_id, // 헤더에도 멤버 ID 포함
-				},
-			};
-
 			// 해당 ID의 문서가 DB에 존재하는지 확인
 			let documentExists = false;
 			try {
 				// 문서 존재 여부 확인 (404 에러가 발생하지 않으면 문서가 존재함)
 				console.log(`[draftingApi.saveDraft] 문서 존재 여부 확인: id=${draftingDto.id}`);
-				await get(`/api/data/drafting-data/${draftingDto.id}/exists`);
+				await get(`/api/drafting/exists/${draftingDto.id}`);
 				documentExists = true;
 				console.log(`[draftingApi.saveDraft] 문서가 DB에 존재함: id=${draftingDto.id}`);
 			} catch (error) {
@@ -110,13 +86,11 @@ const draftingApi = {
 			if (documentExists) {
 				// 기존 문서 업데이트 (PUT 요청)
 				console.log(`[draftingApi.saveDraft] DB에 존재하는 문서 업데이트: id=${draftingDto.id}`);
-				const updateEndpoint = `/api/data/drafting-data/${draftingDto.id}?member_id=${encodeURIComponent(draftingDto.member_id)}`;
-				response = await put(updateEndpoint, draftingDto, options);
+				response = await put(`/api/drafting/${draftingDto.id}`, draftingDto);
 			} else {
 				// 새 문서 생성 (POST 요청)
 				console.log(`[draftingApi.saveDraft] 신규 문서 생성: id=${draftingDto.id}`);
-				const endpoint = `/api/data/drafting-data?member_id=${encodeURIComponent(draftingDto.member_id)}`;
-				response = await post(endpoint, draftingDto, options);
+				response = await post(`/api/drafting`, draftingDto);
 			}
 
 			console.log(`[draftingApi.saveDraft] 응답 데이터:`, response);
@@ -135,9 +109,9 @@ const draftingApi = {
 	deleteDraft: async id => {
 		console.log(`[draftingApi.deleteDraft] 드래프트 삭제 요청: id=${id}`);
 		try {
-			const response = await put('/api/data/drafting-data/delete', {
+			const response = await put('/api/drafting/delete', {
 				id,
-				is_deleted: true,
+				isDeleted: true,
 			});
 
 			console.log(`[draftingApi.deleteDraft] 응답 데이터:`, response);
@@ -156,13 +130,13 @@ const draftingApi = {
 	getDraft: async id => {
 		console.log(`[draftingApi.getDraft] 드래프트 조회 요청: id=${id}`);
 		try {
-			const data = await get(`/api/data/drafting-data/${id}`);
+			const data = await get(`/api/drafting/${id}`);
 			console.log(`[draftingApi.getDraft] 응답 데이터:`, data);
 
 			// 데이터 구조 매핑: 백엔드 → 프론트엔드
 			let contractData;
 			try {
-				contractData = typeof data.contract_data === 'string' ? JSON.parse(data.contract_data) : data.contract_data;
+				contractData = typeof data.contractData === 'string' ? JSON.parse(data.contractData) : data.contractData;
 			} catch (e) {
 				console.error('계약 데이터 파싱 오류:', e);
 				contractData = {};
@@ -172,7 +146,7 @@ const draftingApi = {
 				id: data.id,
 				contractTitle: data.contractTitle,
 				type: data.type,
-				contractData: data.contractData,
+				contractData: contractData,
 				contractingParty: data.party || 'temp',
 				creator: data.memberName,
 				query: data.query,
@@ -183,6 +157,27 @@ const draftingApi = {
 			};
 		} catch (error) {
 			console.error('[draftingApi.getDraft] 오류:', error);
+			throw error;
+		}
+	},
+
+	/**
+	 * 드래프트가 존재하는지 확인합니다.
+	 * @param {string} id - 드래프트 ID
+	 * @returns {Promise<boolean>} 존재 여부
+	 */
+	draftExists: async id => {
+		console.log(`[draftingApi.draftExists] 드래프트 존재 여부 확인: id=${id}`);
+		try {
+			await get(`/api/drafting/exists/${id}`);
+			console.log(`[draftingApi.draftExists] 드래프트 존재함: id=${id}`);
+			return true;
+		} catch (error) {
+			if (error.status === 404) {
+				console.log(`[draftingApi.draftExists] 드래프트 존재하지 않음: id=${id}`);
+				return false;
+			}
+			console.error('[draftingApi.draftExists] 오류:', error);
 			throw error;
 		}
 	},
