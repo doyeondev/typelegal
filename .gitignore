@@ -51,6 +51,6 @@ docker-compose*.yml
 
 # === 기타 ===
 __mocks__/
-cursor.md
+.cursor.md
 _test_log/
 _doc/

@@ -6,6 +6,7 @@ import com.typelegal.domain.drafting.dto.DraftingDto;
 import com.typelegal.domain.drafting.exception.DraftingNotFoundException;
 import com.typelegal.domain.member.dao.MemberRepository;
 import com.typelegal.domain.member.domain.Member;
+import com.typelegal.domain.member.application.MemberService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,6 +21,7 @@ import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -36,6 +38,9 @@ class DraftingServiceTest {
     
     @Mock
     private ObjectMapper objectMapper;
+    
+    @Mock
+    private MemberService memberService;
 
     @InjectMocks
     private DraftingService draftingService;
@@ -234,17 +239,27 @@ class DraftingServiceTest {
     @DisplayName("getDraftsByMemberEmail_회원이메일로_드래프트_목록_조회_성공")
     void getDraftsByMemberEmail_성공() {
         // given
+        String email = "test@typelegal.com";
+        UUID randomMemberId = UUID.randomUUID();
+        
+        // memberService.getMemberIdByEmail() 스터빙 추가
+        when(memberService.getMemberIdByEmail(anyString())).thenReturn(randomMemberId);
+        
         List<Drafting> draftings = new ArrayList<>();
         draftings.add(testDrafting);
-        when(draftingRepository.findAllByMemberEmailAndNotDeleted(anyString())).thenReturn(draftings);
+        when(draftingRepository.findAllByMemberIdAndNotDeleted(any(UUID.class))).thenReturn(draftings);
         
         // when
-        List<DraftingDto> result = draftingService.getDraftsByMemberEmail("test@typelegal.com");
+        List<DraftingDto> result = draftingService.getDraftsByMemberEmail(email);
         
         // then
         assertNotNull(result);
         assertEquals(1, result.size());
         assertEquals(testDrafting.getContractTitle(), result.get(0).getContractTitle());
+        
+        // verify memberService call
+        verify(memberService).getMemberIdByEmail(email);
+        verify(draftingRepository).findAllByMemberIdAndNotDeleted(randomMemberId);
     }
     
     @Test
