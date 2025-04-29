@@ -1,6 +1,6 @@
 import _ from 'lodash';
-import apiClient from '../src/libs/apiClient';
-import userService from '../src/services/userService';
+import apiClient from '../libs/apiClient';
+import userService from '../services/userService';
 
 export async function fetchProcessedData(query1, query2) {
 	try {

@@ -1,6 +1,6 @@
 import React, { Fragment, useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import { personal_data_array } from '/utils/data';
+import { personal_data_array } from '../../utils/data';
 
 export default function PrivacyModal({ isOpen, setIsOpen }) {
 	function closeModal() {

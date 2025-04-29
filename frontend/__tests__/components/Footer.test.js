@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import Footer from '../../components/Footer';
+import Footer from '../../src/components/Footer';
 
 describe('Footer 컴포넌트', () => {
 	test('푸터가 올바르게 렌더링되는지 확인', () => {

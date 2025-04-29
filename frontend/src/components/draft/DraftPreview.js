@@ -1,6 +1,6 @@
 import React from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import CCard from '/components/ui/CCard';
+import CCard from '../ui/CCard';
 
 /**
  * 계약서 작성 페이지 오른쪽 영역 컴포넌트 (계약서 미리보기)

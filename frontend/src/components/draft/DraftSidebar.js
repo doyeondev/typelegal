@@ -1,6 +1,6 @@
 import React from 'react';
-import ProgressBar from '/components/ui/ProgressBar';
-import ProgressList from '/components/ui/ProgressList';
+import ProgressBar from '../ui/ProgressBar';
+import ProgressList from '../ui/ProgressList';
 
 /**
  * 계약서 작성 페이지 사이드바 컴포넌트

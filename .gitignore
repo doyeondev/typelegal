@@ -42,7 +42,6 @@ yarn-error.log*
 Thumbs.db
 *.swp
 *.swo
-
 # === Docker & 배포 ===
 .dockerignore
 Dockerfile*
@@ -54,3 +53,6 @@ __mocks__/
 .cursor.md
 _test_log/
 _doc/
+frontend/.swc/
+frontend/coverage/
+coverage/

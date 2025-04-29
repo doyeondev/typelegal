@@ -1,4 +1,4 @@
-import '../styles/globals.css';
+import '../src/styles/globals.css';
 import Script from 'next/script';
 import Head from 'next/head';
 // import '../node_modules/bootstrap/dist/css/bootstrap.min.css'
@@ -7,7 +7,7 @@ import { ThemeProvider } from 'next-themes';
 import { useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider, Hydrate } from 'react-query';
 import { ReactQueryDevtools } from 'react-query/devtools';
-import { UserProvider } from '../context/UserContext';
+import { UserProvider } from '../src/context/UserContext';
 
 export default function App({ Component, pageProps }) {
 	// React Query 클라이언트는 컴포넌트 마운트마다 재생성

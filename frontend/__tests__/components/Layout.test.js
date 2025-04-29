@@ -1,16 +1,16 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import Layout from '../../components/Layout';
+import Layout from '../../src/components/Layout';
 
 // Header와 Footer 컴포넌트 모킹
-jest.mock('../../components/Header', () => {
+jest.mock('../../src/components/Header', () => {
 	return function MockHeader() {
 		return <div data-testid="header-mock">Header Mock</div>;
 	};
 });
 
-jest.mock('../../components/Footer', () => {
+jest.mock('../../src/components/Footer', () => {
 	return function MockFooter() {
 		return <div data-testid="footer-mock">Footer Mock</div>;
 	};

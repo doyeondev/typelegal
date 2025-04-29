@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
 import { useQuery } from 'react-query';
-import { useUser } from '../../context/UserContext';
+import { useUser } from '../../src/context/UserContext';
 import PrivateRoute from '../../src/components/auth/PrivateRoute';
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -9,36 +9,35 @@ import React, { useEffect, useState, useCallback } from 'react';
 import Head from 'next/head';
 
 // 분리된 컴포넌트 Import
-import DraftHeader from '../../components/draft/DraftHeader';
-import DraftFooter from '../../components/draft/DraftFooter';
-import DraftSidebar from '../../components/draft/DraftSidebar';
-import DraftContent from '../../components/draft/DraftContent';
-import DraftPreview from '../../components/draft/DraftPreview';
+import DraftHeader from '../../src/components/draft/DraftHeader';
+import DraftFooter from '../../src/components/draft/DraftFooter';
+import DraftSidebar from '../../src/components/draft/DraftSidebar';
+import DraftContent from '../../src/components/draft/DraftContent';
+import DraftPreview from '../../src/components/draft/DraftPreview';
 
 // UI Component Import
-import Spinner from '/components/ui/Spinner';
-import SidePanel from '/components/ui/SidePanel';
-import ToastSave from '/components/ui/ToastSave';
+import Spinner from '../../src/components/ui/Spinner';
+import SidePanel from '../../src/components/ui/SidePanel';
+import ToastSave from '../../src/components/ui/ToastSave';
 
 // 유틸 함수 Import
-import { fetchProcessedData } from '/utils/dataUtils.js';
-import { findItemIndex, replaceArray, getKeyAndValue, findItem, getArrayOfKeys, orderBy, groupBy, uniqueArray, flatten } from '/utils/arrayUtils.js';
-import { returnCurrencyValue, returnInputValue } from '/utils/inputUtils.js';
-import { removeHighlight, replaceMulCharInString } from '/utils/textUtils.js';
-import { timeDiffSec, timeDiffMin, timestamp } from '/utils/timeUtils.js';
-import { handleScroll, handleScroll2 } from '/utils/uxUtils.js';
-import { exportContent } from '/utils/fileUtils.js';
-import { resetAuthToken } from '/utils/authUtils.js';
-import { setProp, deepClone } from '/utils/objectUtils.js';
+import { fetchProcessedData } from '../../src/utils/dataUtils.js';
+import { findItemIndex, replaceArray, getKeyAndValue, findItem, getArrayOfKeys, orderBy, groupBy, uniqueArray, flatten } from '../../src/utils/arrayUtils.js';
+import { returnCurrencyValue, returnInputValue } from '../../src/utils/inputUtils.js';
+import { removeHighlight, replaceMulCharInString } from '../../src/utils/textUtils.js';
+import { timeDiffSec, timeDiffMin, timestamp } from '../../src/utils/timeUtils.js';
+import { handleScroll, handleScroll2 } from '../../src/utils/uxUtils.js';
+import { exportContent } from '../../src/utils/fileUtils.js';
+import { resetAuthToken } from '../../src/utils/authUtils.js';
+import { setProp, deepClone } from '../../src/utils/objectUtils.js';
 
 // hook, api Import
-import { useLeavePageConfirmation } from '/pages/hooks/useLeavePageConfirmation';
-import { post_draftLog } from '/pages/api/logs/docDraft';
-import { post_activityLog } from '/pages/api/logs/docActivity';
-import draftService from '/src/services/draftService';
+import { useLeavePageConfirmation } from '../../src/hooks/useLeavePageConfirmation';
+import logService from '../../src/services/logService';
+import draftService from '../../src/services/draftService';
 
 // Zustand store
-import { useDraftStore } from '@/store/useDraftStore';
+import { useDraftStore } from '../../src/store/useDraftStore';
 
 let clause_template, question_template;
 let tracerKey, tracer, cidx;
@@ -320,8 +319,8 @@ function Draft({ contract, contractData, user }) {
 		if (contractId !== '' && docStatus !== '' && currentMember !== '') {
 			console.log('entered post');
 			let draftLog = { userName: currentMember.name, userEmail: currentMember.email, status: docStatus, category: contract.title, title: `${contract.category} 계약서`, contractId: contractId };
-			post_draftLog(draftLog);
-			post_activityLog(activityLog);
+			logService.submitDraftLog(draftLog);
+			logService.saveActivityLog(activityLog);
 		}
 	}, [docStatus, currentMember, contractId, activityLog, contract.title, contract.category]);
 
@@ -358,7 +357,7 @@ function Draft({ contract, contractData, user }) {
 				duration: timeDiffSec(activityLog.startTime, timestamp()),
 				durationMin: timeDiffMin(activityLog.startTime, timestamp()),
 			};
-			post_activityLog(saveLog);
+			logService.saveActivityLog(saveLog);
 			// console.log('saveLog', saveLog)
 			event.preventDefault();
 			event.returnValue = '';
@@ -909,7 +908,6 @@ function Draft({ contract, contractData, user }) {
 	//   grid grid-cols-[240px_1fr_240px]
 	return (
 		<>
-			{/* <SidePanel /> */}
 			<div className="flex flex-col h-screen text-gray-600 body-font relative">
 				{/* 1. HEADER 상단 패널 전체 */}
 				<Head>
@@ -940,27 +938,29 @@ function Draft({ contract, contractData, user }) {
 					<>
 						{/* 2. 메인페이지 전체 */}
 						<SidePanel submittedData={answeredQuestionData} onEditClickHandler={onEditClickHandler} showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
-						<div className="grid grid-cols-[260px_1fr_1.2fr] h-[100%] w-screen overflow-hidden">
-							{/* 2.1. 왼쪽 패널 전체 */}
-							<DraftSidebar activeClauseKeys={activeClauseKeys} questionData={questionData} questionGroupKey={questionGroupKey} progress={progress} showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
+						<div className="flex flex-grow overflow-hidden">
+							<div className="grid grid-cols-[260px_1fr_1.2fr] w-full h-[calc(100vh-120px)]">
+								{/* 2.1. 왼쪽 패널 전체 */}
+								<DraftSidebar activeClauseKeys={activeClauseKeys} questionData={questionData} questionGroupKey={questionGroupKey} progress={progress} showSidebar={showSidebar} setShowSidebar={setShowSidebar} />
 
-							{/* 2.2. 중앙 패널 전체 */}
-							<DraftContent
-								questionPanel={questionPanel}
-								questionGroupData={questionGroupData}
-								questionGroupKey={questionGroupKey}
-								itemIndex={itemIndex}
-								etcClick={etcClick}
-								etcChange={etcChange}
-								onChangeHandler={onChangeHandler}
-								toggleQuestionTip={toggleQuestionTip}
-								onQBtnClickHandler={onQBtnClickHandler}
-								setQuestionPanel={setQuestionPanel}
-								questionData={questionData}
-							/>
+								{/* 2.2. 중앙 패널 전체 */}
+								<DraftContent
+									questionPanel={questionPanel}
+									questionGroupData={questionGroupData}
+									questionGroupKey={questionGroupKey}
+									itemIndex={itemIndex}
+									etcClick={etcClick}
+									etcChange={etcChange}
+									onChangeHandler={onChangeHandler}
+									toggleQuestionTip={toggleQuestionTip}
+									onQBtnClickHandler={onQBtnClickHandler}
+									setQuestionPanel={setQuestionPanel}
+									questionData={questionData}
+								/>
 
-							{/* 2.3. 우측 패널 전체 */}
-							<DraftPreview clauseData={clauseData} newClause={newClause} contract={contract} onClauseClick={clauseClickHandler} />
+								{/* 2.3. 우측 패널 전체 */}
+								<DraftPreview clauseData={clauseData} newClause={newClause} contract={contract} onClauseClick={clauseClickHandler} />
+							</div>
 						</div>
 					</>
 				) : (

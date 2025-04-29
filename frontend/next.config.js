@@ -15,7 +15,6 @@ const nextConfig = {
 
 		return config;
 	},
-	swcMinify: true,
 	compiler: {
 		// SWC 컴파일러를 사용
 		styledComponents: true,

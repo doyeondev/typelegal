@@ -2,10 +2,10 @@
  * dateUtils 테스트
  * CI 환경에서 실행 가능하도록 간소화된 테스트
  */
-import * as dateUtils from '../../utils/dateUtils';
+import * as dateUtils from '../../src/utils/dateUtils';
 
 describe('dateUtils 기능 테스트', () => {
-  test('dateUtils 모듈이 정의되어 있어야 함', () => {
-    expect(dateUtils).toBeDefined();
-  });
+	test('dateUtils 모듈이 정의되어 있어야 함', () => {
+		expect(dateUtils).toBeDefined();
+	});
 });

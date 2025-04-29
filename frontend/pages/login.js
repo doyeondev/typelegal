@@ -4,7 +4,7 @@ import Head from 'next/head';
 import Image from 'next/image';
 import userService from '../src/services/userService';
 import { useRouter } from 'next/router';
-import { useUser } from '../context/UserContext';
+import { useUser } from '../src/context/UserContext';
 import PublicRoute from '../src/components/auth/PublicRoute';
 // import LoginItem from '../components/login-item'
 

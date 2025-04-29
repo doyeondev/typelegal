@@ -1,9 +1,9 @@
 import Image from 'next/image';
 import Head from 'next/head';
 import { Inter } from 'next/font/google';
-import Layout from '../components/Layout';
+import Layout from '../src/components/Layout';
 import { useEffect, useState } from 'react';
-import LoginModal from '../components/modals/LoginModal';
+import LoginModal from '../src/components/modals/LoginModal';
 import Link from 'next/link';
 import PublicRoute from '../src/components/auth/PublicRoute';
 

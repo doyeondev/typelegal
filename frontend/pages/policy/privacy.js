@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import Layout from '@components/Layout';
+import Layout from '../../src/components/Layout';
 import Head from 'next/head';
-import { privacy_array } from '../../utils/data';
+import { privacy_array } from '../../src/utils/data';
 import PublicRoute from '../../src/components/auth/PublicRoute';
 
 import _ from 'lodash';

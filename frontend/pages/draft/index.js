@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import Head from 'next/head';
-import Layout from '/components/Layout';
-import Spinner from '/components/ui/Spinner';
+import Layout from '../../src/components/Layout';
+import Spinner from '../../src/components/ui/Spinner';
 import React, { useEffect, useState } from 'react';
 import { useQuery } from 'react-query';
 import PrivateRoute from '../../src/components/auth/PrivateRoute';

@@ -1,6 +1,6 @@
 import React, { Fragment, useState, useEffect } from 'react';
 import { Dialog, Transition } from '@headlessui/react';
-import LoginItem from '../../components/LoginItem';
+import LoginItem from '../LoginItem';
 
 // 콘솔로 디버깅 메시지를 추가하여 props 검증
 const LoginModal = ({ loginModalOpen, setLoginModalOpen, setExportBtnState }) => {

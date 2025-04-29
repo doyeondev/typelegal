@@ -1,7 +1,7 @@
 import React from 'react';
-import QuestionItem from '../../components/questions/QuestionItems';
-import QuestionInput from '../../components/questions/QuestionInput';
-import QCardBtn from '../../components/questions/QCardBtn';
+import QuestionItem from '../questions/QuestionItems';
+import QuestionInput from '../questions/QuestionInput';
+import QCardBtn from '../questions/QCardBtn';
 import { v4 as uuidv4 } from 'uuid';
 
 /**

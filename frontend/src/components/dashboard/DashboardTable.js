@@ -101,15 +101,15 @@ export const FooterPagination = ({ currentIndex, maxIndex, onClickHandler }) => 
 	for (let i = 0; i <= maxIndex; i++) {
 		if (i === currentIndex) {
 			pagination.push(
-				<Link href="#" id={i} name="paginationNum" onClick={onClickHandler} className="px-2 py-1 text-sm text-blue-500 rounded-md dark:bg-gray-800 bg-blue-100/60" key={uuidv4()}>
+				<button href="#" id={i} name="paginationNum" onClick={onClickHandler} className="px-2 py-1 text-sm text-blue-500 rounded-md dark:bg-gray-800 bg-blue-100/60" key={uuidv4()}>
 					{i + 1}
-				</Link>
+				</button>
 			);
 		} else {
 			pagination.push(
-				<Link href="#" id={i} name="paginationNum" onClick={onClickHandler} className="px-2 py-1 text-sm text-gray-500 rounded-md dark:hover:bg-gray-800 dark:text-gray-300 hover:bg-gray-100" key={uuidv4()}>
+				<button href="#" id={i} name="paginationNum" onClick={onClickHandler} className="px-2 py-1 text-sm text-gray-500 rounded-md dark:hover:bg-gray-800 dark:text-gray-300 hover:bg-gray-100" key={uuidv4()}>
 					{i + 1}
-				</Link>
+				</button>
 			);
 		}
 	}

@@ -1,19 +1,20 @@
-import SingletonRouter, { Router } from 'next/router';
+import { useRouter } from 'next/router';
 import { useEffect } from 'react';
-import { timeDiffSec, timeDiffMin, timestamp } from '../../utils/timeUtils';
-import { post_activityLog } from '/pages/api/logs/docActivity';
+import { timeDiffSec, timeDiffMin, timestamp } from '../utils/timeUtils';
+import logService from '../services/logService';
 
 const defaultConfirmationDialog = async msg => window.confirm(msg);
 
 export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, message = '사이트에서 나가시겠습니까?\n변경사항이 저장되지 않을 수 있습니다.', confirmationDialog = defaultConfirmationDialog) => {
-	useEffect(() => {
-		if (!SingletonRouter.router?.change) {
-			console.log('...', activityLog);
+	const router = useRouter();
 
+	useEffect(() => {
+		if (!router || !router.change) {
+			console.log('...', activityLog);
 			return;
 		}
 
-		const originalChangeFunction = SingletonRouter.router.change;
+		const originalChangeFunction = router.change;
 		const originalOnBeforeUnloadFunction = window.onbeforeunload;
 
 		/*
@@ -37,11 +38,11 @@ export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, mess
 		if (shouldPreventLeaving) {
 			console.log('...', activityLog);
 
-			SingletonRouter.router.change = async (...args) => {
+			router.change = async (...args) => {
 				console.log('그곳에 들어옴....');
 
 				const [historyMethod, , as] = args;
-				const currentUrl = SingletonRouter.router?.state.asPath.split('?')[0];
+				const currentUrl = router.state.asPath.split('?')[0];
 				const changedUrl = as.split('?')[0];
 				const hasNavigatedAwayFromPage = currentUrl !== changedUrl;
 				const wasBackOrForwardBrowserButtonClicked = historyMethod === 'replaceState';
@@ -50,7 +51,7 @@ export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, mess
 				if (hasNavigatedAwayFromPage) {
 					console.log('...A', activityLog);
 					let saveLog = { ...activityLog, ...{ endTime: timestamp(), duration: timeDiffSec(activityLog.startTime, timestamp()), durationMin: timeDiffMin(activityLog.startTime, timestamp()) } };
-					post_activityLog(saveLog);
+					logService.saveActivityLog(saveLog);
 
 					confirmed = await confirmationDialog(message);
 				}
@@ -58,7 +59,7 @@ export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, mess
 				if (confirmed) {
 					// console.log('....3', activityLog)
 
-					Router.prototype.change.apply(SingletonRouter.router, args);
+					router.change.apply(router, args);
 				} else if (wasBackOrForwardBrowserButtonClicked && hasNavigatedAwayFromPage) {
 					// console.log('....4', activityLog)
 
@@ -66,7 +67,7 @@ export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, mess
 					 * The URL changes even if the user clicks "false" to navigate away from the page.
 					 * It is necessary to update it to reflect the current URL.
 					 */
-					await SingletonRouter.router?.push(SingletonRouter.router?.state.asPath);
+					await router.push(router.state.asPath);
 
 					/*
 					 * @todo
@@ -89,10 +90,10 @@ export const useLeavePageConfirmation = (shouldPreventLeaving, activityLog, mess
 		 * When the component is unmounted, the original change function is assigned back.
 		 */
 		return () => {
-			SingletonRouter.router.change = originalChangeFunction;
+			router.change = originalChangeFunction;
 			window.onbeforeunload = originalOnBeforeUnloadFunction;
 		};
-	}, [shouldPreventLeaving, activityLog, message, confirmationDialog]);
+	}, [shouldPreventLeaving, activityLog, message, confirmationDialog, router]);
 };
 
 export default function Alert() {}

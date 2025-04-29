@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import userService from '../src/services/userService';
+import userService from '../services/userService';
 
 // 사용자 컨텍스트 생성
 const UserContext = createContext(null);

@@ -2,17 +2,17 @@ import { useEffect, useState } from 'react';
 import _ from 'lodash';
 import Head from 'next/head';
 import { v4 as uuidv4 } from 'uuid';
-import DeleteModal from '../components/modals/DeleteModal';
-import Spinner from '../components/ui/Spinner';
+import DeleteModal from '../src/components/modals/DeleteModal';
+import Spinner from '../src/components/ui/Spinner';
 import draftService from '../src/services/draftService';
 import userService from '../src/services/userService';
 import { useRouter } from 'next/router';
 import PrivateRoute from '../src/components/auth/PrivateRoute';
 
 // 분리된 대시보드 컴포넌트들 임포트
-import Sidebar from '../components/dashboard/Sidebar';
-import SelectContract from '../components/dashboard/SelectContract';
-import DashboardWrapper from '../components/dashboard/DashboardWrapper';
+import Sidebar from '../src/components/dashboard/Sidebar';
+import SelectContract from '../src/components/dashboard/SelectContract';
+import DashboardWrapper from '../src/components/dashboard/DashboardWrapper';
 
 /**
  * 샘플 계약서 템플릿 데이터
@@ -263,8 +263,8 @@ function DashboardPage() {
 				{loaded === true ? (
 					<div className="flex flex-col w-full">
 						{/* 메인 콘텐츠 영역 */}
-						<div className="grid grid-cols-[1fr] h-screen">
-							<div className={`flex flex-col h-full place-content-center space-y-8 2xl:space-y-[10vh] py-8 px-8 2xl:px-[6vw] mx-auto ${dashboardData && 'mx-0'}`}>
+						<div className="flex flex-col h-screen">
+							<div className={`flex flex-col h-full pt-8 px-8 2xl:px-[6vw] mx-auto ${dashboardData && 'mx-0'}`}>
 								{/* 에러 메시지 */}
 								{error && (
 									<div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg" role="alert">
