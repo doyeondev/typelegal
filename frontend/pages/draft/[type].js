@@ -445,6 +445,7 @@ function Draft({ contract, contractData, user }) {
 			query: contract.type,
 			contract_info: contract,
 			progress: activityLog.docProgress,
+			isDeleted: false,
 		};
 
 		// 저장 버튼이 눌렸을 때

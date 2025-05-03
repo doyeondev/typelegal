@@ -136,6 +136,7 @@ const draftService = {
 				contractInfo: draftData.contract_info,
 				type: draftData.type,
 				progress: draftData.progress,
+				isDeleted: false,
 			};
 
 			log.debug(`[draftService.saveDraft] 요청 데이터 준비 완료:`, draftingDto.id);
@@ -143,8 +144,11 @@ const draftService = {
 			// 항상 POST 요청으로 저장 (404 에러 방지)
 			// exists 체크를 별도로 하지 않고 직접 저장 API만 호출
 			log.debug(`[draftService.saveDraft] 드래프트 저장 시작: id=${draftingDto.id}`);
-			const response = await apiClient.post(`/api/drafting`, draftingDto);
-
+			const response = await apiClient.post(`/api/drafting`, draftingDto, {
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			});
 			log.debug(`[draftService.saveDraft] 저장 성공: id=${draftingDto.id}`);
 			return response;
 		} catch (error) {
@@ -162,10 +166,18 @@ const draftService = {
 		log.debug(`[draftService.deleteDraft] 드래프트 삭제 요청: id=${id}`);
 		try {
 			// 드래프트 논리적 삭제 API 호출
-			const response = await apiClient.put('/api/drafting/delete', {
-				id,
-				isDeleted: true,
-			});
+			const response = await apiClient.put(
+				'/api/drafting/delete',
+				{
+					id,
+					isDeleted: true,
+				},
+				{
+					headers: {
+						'Content-Type': 'application/json',
+					},
+				}
+			);
 
 			log.debug(`[draftService.deleteDraft] 삭제 성공: id=${id}`);
 			return response;
