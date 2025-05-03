@@ -142,7 +142,7 @@ public class AuthController {
                     .secure(isProduction())
                     // .secure(false)
                     .path("/")
-                    .sameSite("Lax")
+                    .sameSite("None")
                     .maxAge(Duration.ofDays(7))
                     .build();
             

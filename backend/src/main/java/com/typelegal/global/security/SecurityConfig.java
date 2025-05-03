@@ -48,7 +48,6 @@ public class SecurityConfig {
         configuration.setAllowedOrigins(Arrays.asList(
             "http://localhost:3000",
             "http://127.0.0.1:3000",
-            "https://typelegal.io",
             "http://54.253.167.137:3000",  // 로컬에서 EC2 API 직접 호출 시
             "http://54.253.167.137:8082",  // 브라우저에서 EC2 API 직접 호출 시
             "https://www.typelegal.co.kr"  // 실제 프로덕션 도메인 (필요시 추가)
