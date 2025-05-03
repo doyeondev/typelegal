@@ -3,7 +3,7 @@ import Head from 'next/head';
 import Layout from '../../src/components/Layout';
 import Spinner from '../../src/components/ui/Spinner';
 import React, { useEffect, useState } from 'react';
-import { useQuery } from 'react-query';
+import { useQuery } from '@tanstack/react-query';
 import PrivateRoute from '../../src/components/auth/PrivateRoute';
 
 import useSWR from 'swr';

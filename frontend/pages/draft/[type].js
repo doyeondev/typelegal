@@ -1,10 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { useSearchParams } from 'next/navigation';
-import { useQuery } from 'react-query';
 import { useUser } from '../../src/context/UserContext';
 import PrivateRoute from '../../src/components/auth/PrivateRoute';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useQuery, dehydrate, QueryClient } from '@tanstack/react-query';
 
 import Head from 'next/head';
 
@@ -43,14 +43,58 @@ let clause_template, question_template;
 let tracerKey, tracer, cidx;
 let item_value;
 
-// 서버사이드 API 함수 정의
-const fetchTemplateInfo = async type => {
-	const response = await fetch(`https://conan.ai/_functions/getTemplateInfo/${type}`);
-	if (!response.ok) {
-		throw new Error(`템플릿 정보 가져오기 실패: ${response.status}`);
+// 데이터 fetch 함수들을 외부로 분리하여 코드 가독성 향상 및 재사용성 증가
+const fetchUserData = async (API_BASE_URL, cookies) => {
+	const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
+		headers: { Cookie: cookies },
+		credentials: 'include',
+	});
+
+	if (!userResponse.ok) {
+		return null;
 	}
-	const data = await response.json();
+
+	return userResponse.json();
+};
+
+const fetchTemplateInfo = async type => {
+	const res = await fetch(`https://conan.ai/_functions/getTemplateInfo/${type}`);
+	if (!res.ok) throw new Error('템플릿 정보 오류');
+	const data = await res.json();
 	return data.items;
+};
+
+// 기존 dataUtils.js의 함수를 덮어쓰지 않기 위한 새 함수
+const fetchTemplateProcessedData = async (query1, query2, options = {}) => {
+	// 서버 사이드일 때 (API_BASE_URL, cookies, authToken 등 전달된 경우)
+	if (options.API_BASE_URL) {
+		const headers = {
+			'Content-Type': 'application/json',
+			...(options.cookies && { Cookie: options.cookies }),
+			...(options.authToken && { Authorization: `Bearer ${options.authToken}` }),
+		};
+
+		const response = await fetch(`${options.API_BASE_URL}/api/template/process`, {
+			method: 'POST',
+			headers,
+			body: JSON.stringify({
+				query1,
+				query2,
+				type: query2,
+			}),
+			credentials: 'include',
+		});
+
+		if (!response.ok) {
+			throw new Error('템플릿 처리 데이터 오류');
+		}
+
+		return response.json();
+	}
+	// 클라이언트 사이드일 때 (기존 fetchProcessedData 호출)
+	else {
+		return fetchProcessedData(query1, query2);
+	}
 };
 
 // 기존의 Draft 컴포넌트
@@ -119,16 +163,19 @@ function Draft({ contract, contractData, user }) {
 	useLeavePageConfirmation(changesOnPage, activityLog);
 
 	// React Query 훅 사용 (SSR prefetch와 통합)
-	const { data: templateData } = useQuery(['templateInfo', contract.type], () => fetchTemplateInfo(contract.type), {
+	const { data: templateData } = useQuery(['templateInfo', contract?.type], () => fetchTemplateInfo(contract.type), {
 		initialData: contract,
-		staleTime: 1000 * 60 * 5, // 5분 동안 fresh 상태 유지
+		cacheTime: 1000 * 60 * 30, // 30분 동안 캐시 유지
+		enabled: !!contract?.type, // contract.type이 있을 때만 활성화
+		refetchOnWindowFocus: false, // 창 포커스 시 다시 가져오지 않음
 	});
 
 	// 계약서 데이터 쿼리 (이미 서버에서 가져온 경우 사용)
-	const { data: processedData } = useQuery(['processedData', contract.type], () => fetchProcessedData('10', contract.type), {
+	const { data: processedData } = useQuery(['processedData', contract?.type], () => fetchTemplateProcessedData('10', contract.type), {
 		initialData: contractData,
-		staleTime: 1000 * 60 * 5,
-		enabled: !!contract.type,
+		cacheTime: 1000 * 60 * 30, // 30분 동안 캐시 유지
+		enabled: !!contract?.type, // contract.type이 있을 때만 활성화
+		refetchOnWindowFocus: false, // 창 포커스 시 다시 가져오지 않음
 	});
 
 	// REFACTORING: 공통으로 사용되는 groupBy 로직을 함수로 추출
@@ -220,7 +267,7 @@ function Draft({ contract, contractData, user }) {
 					} else {
 						// 클라이언트에서 데이터 로드
 						try {
-							data = await fetchProcessedData('10', contract.type);
+							data = await fetchTemplateProcessedData('10', contract.type);
 						} catch (fetchError) {
 							alert('계약서 데이터를 가져오는 데 실패했습니다. 페이지를 새로고침해주세요.');
 							isLoaded(true);
@@ -985,107 +1032,86 @@ export default function DraftWrapper({ contract, contractData, user }) {
 	);
 }
 
-export async function getServerSideProps({ params, req, res }) {
+export async function getServerSideProps({ params, req }) {
 	console.log(`[getServerSideProps] 요청 타입: ${params.type}`);
 
+	const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
+	const cookies = req.headers.cookie || '';
+	const authToken = req.cookies?.auth_token || '';
+
+	const queryClient = new QueryClient();
+
+	const redirectToError = (errorType, message) => ({
+		redirect: {
+			destination: `/dashboard?error=${errorType}&message=${encodeURIComponent(message)}`,
+			permanent: false,
+		},
+	});
+
+	const redirectToLogin = () => ({
+		redirect: {
+			destination: `/login?redirect=/draft/${params.type}`,
+			permanent: false,
+		},
+	});
+
 	try {
-		// REFACTORING: API_BASE_URL 상수를 상단에 배치하여 코드를 더 깔끔하게 만듭니다
-		const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082';
-		const cookies = req.headers.cookie || '';
-		const authToken = req.cookies?.auth_token || '';
+		// 병렬로 사용자 정보와 템플릿 정보 가져오기
+		const [user, contract] = await Promise.all([
+			fetchUserData(API_BASE_URL, cookies),
+			fetchTemplateInfo(params.type).catch(error => {
+				console.error('템플릿 정보 가져오기 실패:', error);
+				return null;
+			}),
+		]);
 
-		// REFACTORING: 오류 처리 및 리디렉션을 위한 공통 함수 생성
-		const redirectToError = (errorType, message) => {
-			return {
-				redirect: {
-					destination: `/dashboard?error=${errorType}&message=${encodeURIComponent(message)}`,
-					permanent: false,
-				},
-			};
-		};
-
-		// 사용자 인증 상태 확인
-		const userResponse = await fetch(`${API_BASE_URL}/api/auth/me`, {
-			headers: { Cookie: cookies },
-			credentials: 'include',
-		});
-
-		// 인증되지 않은 경우 로그인 페이지로 리디렉션
-		if (!userResponse.ok) {
-			return {
-				redirect: {
-					destination: `/login?redirect=/draft/${params.type}`,
-					permanent: false,
-				},
-			};
+		// 사용자 인증 확인
+		if (!user) {
+			return redirectToLogin();
 		}
 
-		// 사용자 정보 가져오기
-		const user = await userResponse.json();
-
-		// 템플릿 정보 가져오기
-		let templateInfo;
-		try {
-			templateInfo = await fetchTemplateInfo(params.type);
-		} catch (error) {
+		// 템플릿 정보 확인
+		if (!contract) {
 			return redirectToError('template', '템플릿 정보를 가져올 수 없습니다');
 		}
 
-		if (!templateInfo) {
-			return redirectToError('template', '템플릿 정보를 가져올 수 없습니다');
-		}
+		// 템플릿 정보 미리 패칭
+		await queryClient.prefetchQuery(
+			['templateInfo', params.type],
+			() => contract,
+			{ staleTime: Infinity } // 바뀌지 않음.
+		);
 
 		// 템플릿 처리 데이터 가져오기
-		let processedData;
+		let contractData;
 		try {
-			// 헤더 구성
-			const headers = {
-				'Content-Type': 'application/json',
-				...(cookies && { Cookie: cookies }),
-				...(authToken && { Authorization: `Bearer ${authToken}` }),
-			};
-
-			// 백엔드 API 요청
-			const response = await fetch(`${API_BASE_URL}/api/template/process`, {
-				method: 'POST',
-				headers,
-				body: JSON.stringify({
-					query1: '10',
-					query2: params.type,
-					type: params.type,
-				}),
-				credentials: 'include',
+			contractData = await fetchTemplateProcessedData('10', params.type, {
+				API_BASE_URL,
+				cookies,
+				authToken,
 			});
 
-			if (!response.ok) {
-				throw new Error(`백엔드 API 호출 실패: ${response.status}`);
-			}
-
-			processedData = await response.json();
+			// 계약서 데이터 미리 패칭 (성능 최적화)
+			await queryClient.prefetchQuery(['processedData', params.type], () => contractData, {
+				staleTime: Infinity, // 바뀌지 않음.
+				cacheTime: 1000 * 60 * 30, // 30분동안 캐시 유지
+			});
 		} catch (error) {
+			console.error('템플릿 처리 데이터 가져오기 실패:', error);
 			return redirectToError('template', '템플릿 처리 데이터를 가져올 수 없습니다');
 		}
 
-		// 처리 데이터를 가져오지 못한 경우
-		if (!processedData) {
-			return redirectToError('template', '템플릿 처리 데이터를 가져올 수 없습니다');
-		}
-
-		// 정상적으로 데이터를 가져온 경우
+		// 렌더링 최적화를 위해 필요한 초기 상태만 포함
 		return {
 			props: {
-				contract: templateInfo,
-				contractData: processedData,
+				dehydratedState: dehydrate(queryClient),
+				contract,
+				contractData,
 				user,
 			},
 		};
 	} catch (error) {
-		// 오류 발생 시 로그인 페이지로 리디렉션
-		return {
-			redirect: {
-				destination: `/login?redirect=/draft/${params.type}&error=true`,
-				permanent: false,
-			},
-		};
+		console.error('getServerSideProps 오류:', error);
+		return redirectToLogin();
 	}
 }

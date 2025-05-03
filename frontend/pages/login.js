@@ -23,15 +23,21 @@ function LoginPage() {
 		}
 
 		// URL 파라미터 확인
-		const { tokenExpired, unauthorized } = router.query;
+		const { tokenExpired, unauthorized, expired, error } = router.query;
 
 		// 토큰 만료 또는 인증 오류 메시지 표시
-		if (tokenExpired) {
+		if (tokenExpired || expired) {
 			setLoginError(true);
 			setErrorMessage('세션이 만료되었습니다. 다시 로그인해주세요.');
 		} else if (unauthorized) {
 			setLoginError(true);
 			setErrorMessage('로그인이 필요한 페이지입니다.');
+		} else if (error === 'api') {
+			setLoginError(true);
+			setErrorMessage('서버 연결에 문제가 발생했습니다. 다시 시도해주세요.');
+		} else if (error === 'unknown') {
+			setLoginError(true);
+			setErrorMessage('알 수 없는 오류가 발생했습니다. 다시 시도해주세요.');
 		}
 	}, [router.query]);
 
@@ -74,7 +80,21 @@ function LoginPage() {
 		} catch (error) {
 			console.error('로그인 오류:', error);
 			setLoginError(true);
-			setErrorMessage(error.message || '로그인 처리 중 오류가 발생했습니다.');
+
+			// 에러 메시지 설정
+			if (error.status === 401) {
+				setErrorMessage('이메일 또는 비밀번호가 올바르지 않습니다.');
+			} else if (error.status === 403) {
+				setErrorMessage(error.message || '서버에서 접근이 거부되었습니다. 관리자에게 문의하세요.');
+			} else if (error.status === 429) {
+				setErrorMessage('로그인 시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.');
+			} else if (error.message) {
+				setErrorMessage(error.message);
+			} else {
+				setErrorMessage('로그인 중 오류가 발생했습니다. 다시 시도해주세요.');
+			}
+
+			throw error;
 		} finally {
 			setDisabled(false);
 		}
@@ -89,16 +109,41 @@ function LoginPage() {
 			console.log('로그인 시도 중...');
 			console.log('입력된 이메일:', email);
 
-			// API 클라이언트를 사용하여 로그인
-			const userData = await userService.login({
-				email: email,
-				password: password,
+			// 직접 fetch로 요청하여 Content-Type 문제 해결
+			const apiUrl = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8082'}/api/auth/login`;
+			console.log('로그인 API URL:', apiUrl);
+
+			const response = await fetch(apiUrl, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					email: email,
+					password: password,
+				}),
+				credentials: 'include', // 쿠키 포함
 			});
+
+			if (!response.ok) {
+				const errorData = await response.text();
+				console.error('로그인 실패 응답:', response.status, errorData);
+				throw {
+					status: response.status,
+					message: errorData || '로그인에 실패했습니다.',
+				};
+			}
+
+			const userData = await response.json();
 			console.log('로그인 성공:', userData);
 
 			if (!userData) {
 				throw new Error('로그인은 성공했으나 사용자 정보를 받지 못했습니다.');
 			}
+
+			// 로그인 상태 저장
+			localStorage.setItem('is_logged_in', 'true');
+			sessionStorage.setItem('member_key', JSON.stringify(userData));
 
 			// UserContext를 통해 전역 상태 업데이트
 			login(userData);
@@ -112,6 +157,8 @@ function LoginPage() {
 			// 에러 메시지 설정
 			if (error.status === 401) {
 				setErrorMessage('이메일 또는 비밀번호가 올바르지 않습니다.');
+			} else if (error.status === 403) {
+				setErrorMessage(error.message || '서버에서 접근이 거부되었습니다. 관리자에게 문의하세요.');
 			} else if (error.status === 429) {
 				setErrorMessage('로그인 시도 횟수가 너무 많습니다. 잠시 후 다시 시도해주세요.');
 			} else if (error.message) {

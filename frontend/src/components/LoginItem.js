@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 // import Link from 'next/link';
 import Head from 'next/head';
 import Image from 'next/image';
+import userService from '../services/userService';
 
 export default function LoginItem() {
 	const [loginError, setLoginError] = useState(false);
@@ -39,54 +40,16 @@ export default function LoginItem() {
 
 	async function loginAccount(userInfo) {
 		try {
-			// 기존 외부 API 대신 백엔드 API로 변경
-			const apiUrlEndpoint = `${process.env.NEXT_PUBLIC_API_URL || '/api'}/auth/login`;
-			console.log('로그인 API 호출:', apiUrlEndpoint);
+			console.log('userService 로그인 API 호출');
+			const userData = await userService.login(userInfo);
 
-			const response = await fetch(apiUrlEndpoint, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(userInfo),
-				credentials: 'include', // 쿠키를 자동으로 포함
-			});
+			console.log('로그인 성공:', userData);
 
-			console.log('로그인 응답 상태:', response.status);
-
-			if (response.ok) {
-				const data = await response.json();
-				console.log('로그인 성공:', data);
-
-				// JWT 토큰 localStorage에 저장 (백업용)
-				if (data.token) {
-					localStorage.setItem('auth_token', data.token);
-				}
-
-				// 사용자 정보 세션 스토리지에 저장
-				const memberInfo = {
-					id: data.id,
-					email: data.email,
-					name: data.name,
-					role: data.role,
-					submittedSurvey: data.submittedSurvey ? true : false,
-				};
-				console.log('저장된 회원 정보:', memberInfo);
-				sessionStorage.setItem('member_key', JSON.stringify(memberInfo));
-
-				// 페이지 새로고침
-				window.location.href = '/dashboard';
-			} else {
-				// 오류 처리
-				const errorData = await response.json().catch(() => null);
-				console.error('로그인 실패:', errorData || response.statusText);
-
-				setErrorMessage(errorData || '로그인에 실패했습니다. 다시 시도해주세요.');
-				setLoginError(true);
-			}
+			// 페이지 새로고침
+			window.location.href = '/dashboard';
 		} catch (error) {
-			console.error('로그인 중 오류 발생:', error);
-			setErrorMessage('서버 연결에 실패했습니다. 잠시 후 다시 시도해주세요.');
+			console.error('로그인 처리 오류:', error);
+			setErrorMessage(error.message || '로그인에 실패했습니다. 다시 시도해주세요.');
 			setLoginError(true);
 		} finally {
 			setDisabled(false);

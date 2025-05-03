@@ -72,6 +72,52 @@ const draftService = {
 	},
 
 	/**
+	 * SSR에서 사용자의 드래프트 목록을 가져옵니다.
+	 * 클라이언트 저장소 접근 없이 서버 측 쿠키로 인증합니다.
+	 * @param {Object} param
+	 * @param {string} param.cookie - 요청 헤더에서 가져온 쿠키 문자열
+	 * @returns {Promise<Array>} 드래프트 목록
+	 */
+	getMemberDraftsSSR: async ({ cookie }) => {
+		log.debug(`[draftService.getMemberDraftsSSR] SSR 드래프트 목록 요청, 쿠키 존재: ${!!cookie}`);
+		try {
+			const response = await apiClient.get(`/api/drafting/user`, { cookie });
+			log.debug(`[draftService.getMemberDraftsSSR] 응답 성공`);
+
+			// 응답 데이터 추출
+			const data = response.data || response;
+
+			// 배열 타입 검증
+			if (!Array.isArray(data)) {
+				log.warn(`[draftService.getMemberDraftsSSR] 응답이 배열이 아님:`, data);
+				return [];
+			}
+
+			log.debug(`[draftService.getMemberDraftsSSR] 응답 데이터:`, data.length, '개 항목');
+
+			// 프론트에서 사용하는 형식으로 가공
+			return data.map(item => ({
+				id: item.id,
+				contract_title: item.contractTitle || item.contract_title || '',
+				type: item.type || 'default',
+				creator: item.memberName || item.creator || '사용자',
+				updated_at: item.updatedAt || item.updated_at || new Date().toISOString(),
+				status: item.status || 'stage1',
+				query: item.query || '',
+				is_deleted: item.isDeleted || item.is_deleted || false,
+				progress: item.progress || 0,
+			}));
+		} catch (error) {
+			log.error('[draftService.getMemberDraftsSSR] SSR 오류:', error);
+			// 인증 오류 시 명확한 처리
+			if (error.status === 401) {
+				log.warn('[draftService.getMemberDraftsSSR] 인증 오류로 인한 요청 실패');
+			}
+			throw error;
+		}
+	},
+
+	/**
 	 * 드래프트를 저장합니다.
 	 * @param {Object} draftData - 저장할 드래프트 데이터
 	 * @returns {Promise<Object>} 저장된 드래프트 정보

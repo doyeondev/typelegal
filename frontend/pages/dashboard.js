@@ -14,6 +14,8 @@ import Sidebar from '../src/components/dashboard/Sidebar';
 import SelectContract from '../src/components/dashboard/SelectContract';
 import DashboardWrapper from '../src/components/dashboard/DashboardWrapper';
 
+import { QueryClient, dehydrate, Hydrate } from '@tanstack/react-query';
+
 /**
  * 샘플 계약서 템플릿 데이터
  * @type {Array} 계약서 템플릿 목록
@@ -29,14 +31,14 @@ const CONTRACT_TEMPLATES = [
  * 대시보드 페이지 컴포넌트
  * 사용자의 계약서 목록과 계약서 작성 옵션을 보여주는 메인 페이지
  */
-function DashboardPage() {
+function DashboardPage({ initialUserData, initialDrafts, initialGroup }) {
 	// 상태 관리 변수들
-	const [dashboardData, setDashboardData] = useState([]); // 전체 데이터
-	const [dashboardGroup, setDashboardGroup] = useState([]); // 페이지네이션을 위한 그룹화된 데이터
+	const [dashboardData, setDashboardData] = useState(initialDrafts || []); // 전체 데이터
+	const [dashboardGroup, setDashboardGroup] = useState(initialGroup || []); // 페이지네이션을 위한 그룹화된 데이터
 	const [currentIndex, setCurrentIndex] = useState(0); // 현재 페이지 인덱스
-	const [maxIndex, setMaxIndex] = useState(0); // 최대 페이지 인덱스
-	const [loaded, isLoaded] = useState(false); // 로딩 상태
-	const [currentMember, setCurrentMember] = useState(''); // 현재 로그인한 사용자 정보
+	const [maxIndex, setMaxIndex] = useState(initialGroup ? initialGroup.length - 1 : 0); // 최대 페이지 인덱스
+	const [loaded, isLoaded] = useState(!!initialUserData); // 로딩 상태 - SSR 데이터가 있으면 바로 로드됨
+	const [currentMember, setCurrentMember] = useState(initialUserData || ''); // 현재 로그인한 사용자 정보
 	const [saveToastState, setSaveToastState] = useState(false); // 저장 알림 상태
 	const [error, setError] = useState(null); // 에러 상태 추가
 	const router = useRouter();
@@ -67,6 +69,12 @@ function DashboardPage() {
 
 	// 주기적인 인증 상태 확인 (토큰 만료 방지)
 	useEffect(() => {
+		// 초기 로드 시 SSR 데이터가 있으면 추가 로드를 건너뛰기
+		if (initialUserData && initialDrafts) {
+			console.log('SSR 데이터 사용 중, 클라이언트 측 초기 데이터 로드 건너뛰기');
+			return;
+		}
+
 		const checkAuthentication = async () => {
 			try {
 				const isAuthenticated = await checkAuthStatus();
@@ -88,10 +96,17 @@ function DashboardPage() {
 
 		// 컴포넌트 언마운트 시 인터벌 정리
 		return () => clearInterval(tokenCheckInterval);
-	}, [router]);
+	}, [router, initialUserData, initialDrafts]);
 
-	// 컴포넌트 마운트 시 데이터 로드
+	// 컴포넌트 마운트 시 데이터 로드 (SSR 데이터가 없을 때만)
 	useEffect(() => {
+		// SSR 데이터가 있으면 초기 로드를 건너뛰기
+		if (initialUserData && initialDrafts && initialDrafts.length > 0) {
+			console.log('SSR 데이터 있음, 클라이언트 측 데이터 로드 건너뛰기');
+			isLoaded(true);
+			return;
+		}
+
 		async function getPageData() {
 			localStorage.theme = 'light';
 
@@ -163,7 +178,7 @@ function DashboardPage() {
 			if (sessionStorage.getItem('item_key')) sessionStorage.removeItem('item_key'); // remove contract key session
 		}
 		getPageData();
-	}, [router]);
+	}, [router, initialUserData, initialDrafts, initialGroup]);
 
 	// 데이터 로드 상태 확인용 훅
 	useEffect(() => {
@@ -311,10 +326,84 @@ function DashboardPage() {
  * 대시보드 페이지 컴포넌트 (PrivateRoute로 감싸진)
  * 로그인이 필요한 페이지이므로 PrivateRoute로 보호
  */
-export default function Dashboard() {
+export default function Dashboard({ initialUserData, initialDrafts, initialGroup }) {
 	return (
-		<PrivateRoute>
-			<DashboardPage />
+		<PrivateRoute initialUserData={initialUserData}>
+			<DashboardPage initialUserData={initialUserData} initialDrafts={initialDrafts} initialGroup={initialGroup} />
 		</PrivateRoute>
 	);
+}
+
+export async function getServerSideProps(context) {
+	try {
+		// 1. 요청 헤더에서 쿠키 가져오기
+		const cookie = context.req.headers.cookie || '';
+		console.log('[SSR] 대시보드 로딩: 쿠키 존재 여부', cookie);
+
+		// 2. access_token이 없으면 로그인 페이지로 리디렉션
+		if (!cookie.includes('accessToken')) {
+			console.log('[SSR] 대시보드 로딩: 인증 토큰 없음, 로그인 페이지로 리디렉션');
+			return {
+				redirect: {
+					destination: '/login?redirect=/dashboard',
+					permanent: false,
+				},
+			};
+		}
+
+		// 3. SSR 전용 서비스 함수 호출 (cookie 전달)
+		console.log('[SSR] 대시보드 로딩: API 요청 시작');
+		try {
+			const [user, drafts] = await Promise.all([userService.getCurrentUserSSR({ cookie }), draftService.getMemberDraftsSSR({ cookie })]);
+			console.log('[SSR] 대시보드 로딩: API 요청 성공');
+
+			// 4. 데이터 그룹화 (5개씩)
+			const grouped = chunkArray(drafts, 5);
+
+			// 5. 페이지 렌더링용 props 전달
+			return {
+				props: {
+					initialUserData: user,
+					initialDrafts: drafts,
+					initialGroup: grouped,
+				},
+			};
+		} catch (error) {
+			console.error('[SSR] 대시보드 API 요청 실패:', error);
+
+			// 인증 오류 세부 정보 추가
+			const errorDetail = error.status === 401 ? 'expired=true' : 'error=api';
+
+			return {
+				redirect: {
+					destination: `/login?redirect=/dashboard&${errorDetail}`,
+					permanent: false,
+				},
+			};
+		}
+	} catch (err) {
+		console.error('[SSR] 대시보드 로딩 실패:', err);
+
+		// 에러 발생 시 로그인 페이지로 리디렉션
+		return {
+			redirect: {
+				destination: '/login?redirect=/dashboard&error=unknown',
+				permanent: false,
+			},
+		};
+	}
+}
+
+/**
+ * 배열을 지정된 크기로 그룹화하는 유틸 함수
+ * @param {Array} array - 원본 배열
+ * @param {number} size - 그룹 크기
+ * @returns {Array<Array>} 그룹화된 배열
+ */
+function chunkArray(array, size) {
+	const chunked = [];
+	for (let i = 0; i < array.length; i += size) {
+		chunked.push(array.slice(i, i + size));
+	}
+	return chunked;
 }

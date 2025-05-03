@@ -35,9 +35,16 @@ export function UserProvider({ initialUserData, children }) {
 				// 서버에 실제 인증 상태 확인
 				let isAuthenticated = false;
 				try {
-					const userData = await userService.getCurrentUser();
+					// 로그인 상태 확인 시에도 에러 로깅 스킵
+					const userData = await userService.getCurrentUser({ skipErrorLogging: true });
 					isAuthenticated = !!userData && !!userData.email;
 				} catch (error) {
+					// 401 에러는 정상적으로 인증되지 않은 상태임
+					if (error.status === 401) {
+						console.log('서버 확인: 인증되지 않은 상태');
+					} else {
+						console.error('인증 상태 확인 중 예상치 못한 오류:', error);
+					}
 					isAuthenticated = false;
 				}
 
@@ -90,10 +97,20 @@ export function UserProvider({ initialUserData, children }) {
 			// 서버에서 현재 사용자 정보 가져오기
 			let userData = null;
 			try {
-				userData = await userService.getCurrentUser();
-				// 이미 userService에서 response.data.user를 반환함
+				// 에러 로깅 스킵 옵션 추가
+				userData = await userService.getCurrentUser({ skipErrorLogging: true });
 			} catch (error) {
-				console.error('사용자 정보 API 호출 오류:', error);
+				// 401 에러는 정상적인 경우이므로 조용히 처리
+				if (error.status === 401) {
+					console.log('인증 필요: 로그인 상태가 아님');
+					setUser(null);
+					clearAuthState();
+					setIsLoading(false);
+					return;
+				} else {
+					// 다른 오류는 기록
+					console.error('사용자 정보 API 호출 오류:', error);
+				}
 				userData = null;
 			}
 

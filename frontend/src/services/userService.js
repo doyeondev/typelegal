@@ -38,8 +38,12 @@ const userService = {
 	login: async credentials => {
 		log.debug(`[userService.login] 로그인 요청: email=${credentials.email}`);
 		try {
-			// 백엔드 서버 API 엔드포인트로 요청
-			const response = await apiClient.post('/api/auth/login', credentials);
+			// 백엔드 서버 API 엔드포인트로 요청 - Content-Type 명시적 설정
+			const response = await apiClient.post('/api/auth/login', credentials, {
+				headers: {
+					'Content-Type': 'application/json',
+				},
+			});
 			log.debug(`[userService.login] 로그인 성공`, response);
 
 			// 응답 데이터 구조 확인 및 처리
@@ -123,7 +127,11 @@ const userService = {
 	getCurrentUser: async () => {
 		log.debug(`[userService.getCurrentUser] 사용자 정보 요청 (토큰 기반)`);
 		try {
-			const response = await apiClient.get(`/api/auth/me`);
+			// 401 응답도 받을 수 있도록 커스텀 에러 핸들링 추가
+			const response = await apiClient.get(`/api/auth/me`, {
+				skipErrorLogging: true, // 에러 로깅 스킵 옵션 추가
+			});
+
 			log.debug(`[userService.getCurrentUser] 사용자 정보 조회 성공`);
 
 			// 응답 데이터 구조 확인 및 처리
@@ -153,14 +161,52 @@ const userService = {
 
 			return userData;
 		} catch (error) {
-			log.error('[userService.getCurrentUser] 사용자 정보 조회 실패:', error);
+			// 401 오류는 단순히 로그인이 필요한 상태이므로 조용히 처리
+			if (error.status === 401) {
+				log.debug('[userService.getCurrentUser] 사용자 인증 실패 (401) - 비로그인 상태');
 
-			// 클라이언트 측 상태 정리
-			if (typeof window !== 'undefined') {
-				localStorage.removeItem('is_logged_in');
-				sessionStorage.removeItem('member_key');
+				// 클라이언트 측 상태 정리
+				if (typeof window !== 'undefined') {
+					localStorage.removeItem('is_logged_in');
+					sessionStorage.removeItem('member_key');
+				}
+
+				// 401 에러 타입 명시 (인증 실패임을 명확히)
+				error.isAuthError = true;
+
+				// 새로운 에러 객체 생성 (스택 트레이스 없이)
+				const authError = new Error('인증이 필요합니다.');
+				authError.status = 401;
+				authError.isAuthError = true;
+				throw authError;
+			} else {
+				// 다른 종류의 에러는 기록
+				log.error('[userService.getCurrentUser] 사용자 정보 조회 실패:', error);
+				throw error;
 			}
+		}
+	},
 
+	/**
+	 * SSR 전용: getCurrentUserSSR 명시적으로 추가
+	 * @param {Object} options - 옵션 객체
+	 * @param {string} options.cookie - 쿠키 문자열
+	 * @returns {Promise<Object>} 사용자 정보
+	 */
+	getCurrentUserSSR: async ({ cookie }) => {
+		log.debug(`[userService.getCurrentUserSSR] SSR 사용자 정보 요청, 쿠키 존재: ${!!cookie}`);
+		try {
+			const response = await apiClient.get('/api/auth/me', { cookie });
+			log.debug(`[userService.getCurrentUserSSR] 응답 성공`);
+
+			// 응답 단순 파싱 (스토리지 저장 X)
+			if (response.user) return response.user;
+			if (response.data?.user) return response.data.user;
+			if (typeof response.data === 'object') return response.data;
+
+			return response;
+		} catch (error) {
+			log.error('[userService.getCurrentUserSSR] SSR 사용자 정보 요청 실패:', error);
 			throw error;
 		}
 	},

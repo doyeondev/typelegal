@@ -96,7 +96,7 @@ export const useDraftExists = id => {
  * 드래프트 관련 모든 훅을 한번에 제공하는 메인 훅
  * @returns {Object} 모든 드래프트 관련 훅 모음
  */
-const useDraft = () => {
+const useDraftService = () => {
 	return {
 		useMemberDrafts,
 		useDraftById,
@@ -106,4 +106,4 @@ const useDraft = () => {
 	};
 };
 
-export default useDraft;
+export default useDraftService;

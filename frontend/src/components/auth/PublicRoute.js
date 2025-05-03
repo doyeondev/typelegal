@@ -30,6 +30,14 @@ export default function PublicRoute({ children, restricted = false, redirectTo =
 				if (isLoggedIn && restricted) {
 					console.log('이미 인증된 사용자 - 대시보드로 리디렉션');
 
+					// 현재 경로가 이미 리다이렉트 목적지인 경우 리다이렉트를 수행하지 않음
+					if (router.pathname === redirectTo) {
+						console.log('이미 목적지에 있습니다. 리다이렉트 건너뜀');
+						setShouldRender(false);
+						setIsLoading(false);
+						return;
+					}
+
 					// redirect 쿼리 파라미터가 있는 경우 해당 경로로 리디렉션
 					// (로그인 후 이동할 페이지가 지정된 경우)
 					const redirectParam = router.query.redirect;
@@ -38,9 +46,10 @@ export default function PublicRoute({ children, restricted = false, redirectTo =
 					// URL이 외부 URL인지 확인 (보안)
 					if (redirectParam && (redirectParam.startsWith('http') || redirectParam.startsWith('//'))) {
 						console.warn('외부 URL로 리디렉션 시도 감지. 대시보드로 리디렉션합니다.');
-						router.push(redirectTo);
+						router.replace(redirectTo);
 					} else {
-						router.push(redirectPath);
+						// replace를 사용하여 브라우저 히스토리에 현재 페이지를 남기지 않음
+						router.replace(redirectPath);
 					}
 					return;
 				}
@@ -56,7 +65,14 @@ export default function PublicRoute({ children, restricted = false, redirectTo =
 			}
 		}
 
-		checkAuthStatus();
+		// 로컬 저장소 접근은 클라이언트 사이드에서만 수행
+		if (typeof window !== 'undefined') {
+			checkAuthStatus();
+		} else {
+			// 서버 사이드에서는 기본적으로 렌더링 허용
+			setShouldRender(true);
+			setIsLoading(false);
+		}
 	}, [router, restricted, redirectTo]);
 
 	// 로딩 중이면 스피너 표시

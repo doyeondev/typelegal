@@ -20,6 +20,14 @@ const nextConfig = {
 		styledComponents: true,
 		// removeConsole: true, // production 에서 console 제거
 	},
+	async rewrites() {
+		return [
+			{
+				source: '/api/:path*',
+				destination: 'http://localhost:8082/api/:path*',
+			},
+		];
+	},
 };
 
 module.exports = nextConfig;

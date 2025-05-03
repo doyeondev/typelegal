@@ -3,7 +3,7 @@
  * 로그인, 회원가입, 사용자 정보 조회 등의 기능을 제공합니다.
  */
 
-import { useQuery, useMutation, useQueryClient } from 'react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import userService from '../services/userService';
 
 /**
@@ -13,7 +13,6 @@ import userService from '../services/userService';
  */
 export const useCurrentUser = (options = {}) => {
 	return useQuery('currentUser', userService.getCurrentUser, {
-		staleTime: 1000 * 60 * 5, // 5분
 		retry: 1,
 		...options,
 		onError: error => {

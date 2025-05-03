@@ -38,11 +38,14 @@ const redirectToLogin = currentUrl => {
 /**
  * API 응답 처리 공통 로직
  * @param {Response} response - Fetch API의 Response 객체
+ * @param {Object} options - 추가 옵션
+ * @param {boolean} options.skipErrorLogging - 에러 로깅을 건너뛸지 여부
  * @returns {Promise<any>} 파싱된 응답 데이터
  */
-const handleResponse = async response => {
+const handleResponse = async (response, options = {}) => {
 	// 먼저 Content-Type 헤더 확인
 	const contentType = response.headers.get('Content-Type') || '';
+	const { skipErrorLogging = false } = options;
 
 	// 응답이 성공이 아닌 경우 (HTTP 상태 코드가 200-299 범위를 벗어남)
 	if (!response.ok) {
@@ -63,7 +66,10 @@ const handleResponse = async response => {
 
 		// 인증 오류 처리 (401 Unauthorized)
 		if (response.status === 401) {
-			log.warn('API 요청 인증 실패 (401):', response.url);
+			// 401 에러는 옵션에 따라 로깅할지 결정
+			if (!skipErrorLogging) {
+				log.warn('API 요청 인증 실패 (401):', response.url);
+			}
 
 			// 인증 만료 처리
 			if (typeof window !== 'undefined') {
@@ -71,7 +77,7 @@ const handleResponse = async response => {
 				sessionStorage.removeItem('member_key');
 
 				// 인증 요청 중에는 리디렉션하지 않음 (무한 루프 방지)
-				const isAuthRequest = response.url.includes('/api/auth/login') || response.url.includes('/api/auth/register') || response.url.includes('/api/auth/check-email');
+				const isAuthRequest = response.url.includes('/api/auth/login') || response.url.includes('/api/auth/register') || response.url.includes('/api/auth/check-email') || response.url.includes('/api/auth/me');
 
 				if (!isAuthRequest) {
 					// 현재 URL 저장
@@ -112,8 +118,27 @@ const handleResponse = async response => {
 		error.statusText = response.statusText;
 		error.data = errorData;
 
-		// 오류 로깅 및 던지기
-		log.error('API 요청 실패:', error);
+		// 오류 로깅 및 던지기 (401 에러가 아니거나 로깅을 스킵하지 않는 경우에만)
+		if (!(response.status === 401 && skipErrorLogging)) {
+			// 403 에러의 경우 더 자세한 메시지 처리
+			if (response.status === 403) {
+				log.error('API 접근 권한 없음 (403):', response.url);
+
+				// 에러 데이터에서 메시지 추출
+				let forbiddenMessage = '서버에서 요청을 거부했습니다.';
+				if (errorData && typeof errorData === 'string') {
+					forbiddenMessage = errorData;
+				} else if (errorData && errorData.message) {
+					forbiddenMessage = errorData.message;
+				}
+
+				// 더 명확한 에러 메시지 설정
+				error.message = forbiddenMessage;
+			}
+
+			log.error('API 요청 실패:', error);
+		}
+
 		throw error;
 	}
 
@@ -150,8 +175,8 @@ const createRequestOptions = (method, data, customOptions = {}) => {
 		...customOptions.headers,
 	};
 
-	// POST, PUT, PATCH 요청에 Content-Type 헤더 추가
-	if (['POST', 'PUT', 'PATCH'].includes(method) && data) {
+	// POST, PUT, PATCH 요청에 Content-Type 헤더 추가 (데이터가 있는 경우)
+	if (['POST', 'PUT', 'PATCH'].includes(method)) {
 		headers['Content-Type'] = 'application/json';
 	}
 
@@ -194,18 +219,30 @@ const fetchClient = async (url, method, data, options = {}) => {
 	}
 
 	// 요청 옵션 구성
-	const requestOptions = createRequestOptions(method, data, options);
+	const isServer = typeof window === 'undefined';
+	const { skipErrorLogging, ...otherOptions } = options || {};
+
+	// 서버 환경에서 쿠키가 전달되면 headers.cookie에 포함시킴 (25.05.01 추가)
+	const requestOptions = createRequestOptions(method, data, {
+		...otherOptions,
+		credentials: 'include', // 인증 정보 포함 (쿠키 전송)
+		headers: {
+			...(otherOptions.headers || {}),
+			...(isServer && otherOptions.cookie ? { cookie: otherOptions.cookie } : {}), // SSR 환경 쿠키 전달
+		},
+	});
 
 	try {
 		// 요청 시작 로깅
 		log.debug(`API 요청: ${method} ${fullUrl}`);
 		if (data) log.debug('요청 데이터:', data);
+		if (isServer && otherOptions.cookie) log.debug('SSR 쿠키 전달:', otherOptions.cookie);
 
 		// 요청 보내기
 		const response = await fetch(fullUrl, requestOptions);
 
-		// 응답 처리
-		const result = await handleResponse(response);
+		// 응답 처리 (특별한 옵션 전달)
+		const result = await handleResponse(response, { skipErrorLogging });
 
 		// 성공 응답 로깅
 		log.debug(`API 응답: ${method} ${fullUrl}`, result);

@@ -5,8 +5,8 @@ import Head from 'next/head';
 // import { ThemeProvider } from '@material-tailwind/react'
 import { ThemeProvider } from 'next-themes';
 import { useState, useEffect } from 'react';
-import { QueryClient, QueryClientProvider, Hydrate } from 'react-query';
-import { ReactQueryDevtools } from 'react-query/devtools';
+import { QueryClient, QueryClientProvider, Hydrate } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { UserProvider } from '../src/context/UserContext';
 
 export default function App({ Component, pageProps }) {
@@ -78,7 +78,7 @@ export default function App({ Component, pageProps }) {
 						</ThemeProvider>
 					</UserProvider>
 					{/* 개발 환경에서만 React Query Devtools 표시 */}
-					{process.env.NODE_ENV === 'development' && <ReactQueryDevtools />}
+					{process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} />}
 				</Hydrate>
 			</QueryClientProvider>
 		</>

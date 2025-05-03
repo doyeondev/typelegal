@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 /**
  * 인증 관련 API 컨트롤러
@@ -139,6 +140,7 @@ public class AuthController {
             ResponseCookie cookie = ResponseCookie.from("accessToken", token)
                     .httpOnly(true)
                     .secure(isProduction())
+                    // .secure(false)
                     .path("/")
                     .sameSite("Lax")
                     .maxAge(Duration.ofDays(7))
@@ -237,16 +239,42 @@ public class AuthController {
             // 현재 인증된 사용자 정보 가져오기
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             
-            if (authentication == null || !authentication.isAuthenticated()) {
+            if (authentication == null || !authentication.isAuthenticated() || 
+                    authentication.getPrincipal().equals("anonymousUser")) {
+                System.out.println("인증되지 않은 사용자의 정보 요청 감지");
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
                         .body("인증되지 않은 요청입니다.");
             }
             
-            UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-            String email = userDetails.getUsername();
+            // Principal이 UserDetails 타입인지 String 타입인지 확인
+            Object principal = authentication.getPrincipal();
+            String email;
             
-            Member member = memberService.findByEmail(email)
-                    .orElseThrow(() -> new RuntimeException("사용자 정보를 찾을 수 없습니다."));
+            if (principal instanceof UserDetails) {
+                // UserDetails 타입인 경우 (일반적인 경우)
+                UserDetails userDetails = (UserDetails) principal;
+                email = userDetails.getUsername();
+                System.out.println("UserDetails 타입의 Principal 확인: " + email);
+            } else if (principal instanceof String) {
+                // String 타입인 경우 (토큰 인증 시)
+                email = (String) principal;
+                System.out.println("String 타입의 Principal 확인: " + email);
+            } else {
+                // 지원하지 않는 타입
+                System.out.println("지원하지 않는 Principal 타입: " + (principal != null ? principal.getClass().getName() : "null"));
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("유효하지 않은 인증 정보입니다.");
+            }
+            
+            // 사용자 정보 조회
+            Optional<Member> memberOpt = memberService.findByEmail(email);
+            if (memberOpt.isEmpty()) {
+                System.out.println("인증된 이메일에 해당하는 사용자 정보를 찾을 수 없음: " + email);
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("사용자 정보를 찾을 수 없습니다.");
+            }
+            
+            Member member = memberOpt.get();
             
             return ResponseEntity.ok(AuthResponse.builder()
                     .id(member.getId()) // ID 추가
@@ -256,8 +284,17 @@ public class AuthController {
                     .submittedSurvey(member.getSubmittedSurvey() != null && member.getSubmittedSurvey())
                     .build());
         } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("사용자 정보 조회 중 오류가 발생했습니다: " + e.getMessage());
+            System.out.println("사용자 정보 조회 중 오류 발생: " + e.getMessage());
+            e.printStackTrace();
+            
+            // 오류 메시지 분석하여 적절한 HTTP 상태 코드 반환
+            if (e.getMessage() != null && e.getMessage().contains("사용자 정보를 찾을 수 없습니다")) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body("사용자 정보 조회 중 오류가 발생했습니다: " + e.getMessage());
+            } else {
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body("사용자 정보 조회 중 오류가 발생했습니다: " + e.getMessage());
+            }
         }
     }
     
