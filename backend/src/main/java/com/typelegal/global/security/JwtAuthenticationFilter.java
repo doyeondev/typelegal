@@ -39,16 +39,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             @NonNull HttpServletResponse response,
             @NonNull FilterChain filterChain
     ) throws ServletException, IOException {
-        // OPTIONS 메소드(CORS preflight)는 인증 처리 없이 통과
         if (request.getMethod().equals("OPTIONS")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // JWT 토큰 추출 시도 (헤더 또는 쿠키에서)
         String jwt = extractJwtFromRequest(request);
-        
-        // 토큰이 없는 경우 다음 필터로 넘김
+
         if (jwt == null) {
             filterChain.doFilter(request, response);
             return;

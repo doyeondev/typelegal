@@ -88,7 +88,9 @@ public class DraftingService {
         drafting.setType(draftingDto.getType());
 
         drafting.setProgress(draftingDto.getProgress());
-
+        
+        // isDeleted 항상 false로 명시적 설정 (기존 데이터 업데이트 시에도 적용)
+        drafting.setIsDeleted(false);
         
         // 회원 정보 설정 (있는 경우에만)
         if (member != null) {
@@ -132,6 +134,9 @@ public class DraftingService {
         drafting.setType(draftingDto.getType());
 
         drafting.setProgress(draftingDto.getProgress());
+        
+        // isDeleted 항상 false로 명시적 설정 (기존 데이터가 삭제된 것으로 표시되는 것 방지)
+        drafting.setIsDeleted(false);
 
         Drafting updatedDrafting = draftingRepository.save(drafting);
         log.info("계약서 드래프트 수정 완료: id={}", updatedDrafting.getId());
